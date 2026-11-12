@@ -1,0 +1,230 @@
+﻿@page "/admin/slips"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="container-fluid py-4 fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-primary mb-0"><i class="bi bi-qr-code-scan me-2"></i>ประวัติการตรวจสอบสลิป</h3>
+            <p class="text-muted small mb-0">จัดการรายการสลิปที่ผิดพลาด หรือสลิปซ้ำ แยกตามร้านค้า</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm rounded-pill shadow-sm" @onclick="LoadData">
+                <i class="bi bi-arrow-clockwise me-1"></i> รีเฟรชข้อมูล
+            </button>
+        </div>
+    </div>
+
+    @* --- ส่วนตัวกรอง (Filters) --- *@
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body bg-light rounded-3 p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">เลือกบัญชีร้าน</label>
+                    <select class="form-select shadow-sm" @bind="filterShopId">
+                        <option value="0">ทั้งหมด (ทุกร้าน)</option>
+                        <option value="1">สมหวัง ลูกชิ้นเนื้อแท้ (ID: 1)</option>
+                        <option value="3">สมหวัง น้ำปลาร้า (ID: 3)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">ค้นหา (ชื่อ/เบอร์/เหตุผล)</label>
+                    <input type="text" class="form-control shadow-sm" placeholder="พิมพ์เพื่อค้นหา..." @bind="searchText" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">สถานะสลิป</label>
+                    <select class="form-select shadow-sm" @bind="filterStatus">
+                        <option value="">ทุกสถานะ</option>
+                        <option value="Approved">✅ ผ่าน (Approved)</option>
+                        <option value="Rejected">❌ ไม่ผ่าน (Rejected)</option>
+                        <option value="Duplicate">⚠️ สลิปซ้ำ (Duplicate)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">ตั้งแต่วันที่</label>
+                    <input type="date" class="form-control shadow-sm" @bind="startDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">ถึงวันที่</label>
+                    <input type="date" class="form-control shadow-sm" @bind="endDate" />
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-primary w-100 fw-bold shadow" @onclick="LoadData">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* --- ตารางข้อมูล (Table) --- *@
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 text-center">
+                <thead class="bg-dark text-white small text-uppercase">
+                    <tr>
+                        <th style="width: 80px;">รูปสลิป</th>
+                        <th style="width: 140px;">วันที่/เวลา</th>
+                        <th style="width: 120px;">ร้านค้า</th>
+                        <th class="text-start">ลูกค้า</th>
+                        <th style="width: 120px;" class="text-end">ยอดเงิน</th>
+                        <th style="width: 100px;">สถานะ</th>
+                        <th class="text-start">เหตุผล/ผลลัพธ์</th>
+                        <th style="width: 80px;">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (isLoading)
+                    {
+                        <tr><td colspan="8" class="py-5"><div class="spinner-border text-primary opacity-50"></div></td></tr>
+                    }
+                    else if (logs.Count == 0)
+                    {
+                        <tr><td colspan="8" class="py-5 text-muted">ไม่พบข้อมูลสลิปตามเงื่อนไขที่ระบุ</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var log in logs)
+                        {
+                            <tr>
+                                <td class="p-1">
+                                    @if (!string.IsNullOrEmpty(log.SlipImageUrl))
+                                    {
+                                        <img src="@log.SlipImageUrl" class="rounded border shadow-sm"
+                                             style="width: 45px; height: 45px; object-fit: cover; cursor: pointer;"
+                                             @onclick="() => OpenImage(log.SlipImageUrl)" />
+                                    }
+                                </td>
+                                <td class="small">
+                                    <div class="fw-bold">@log.AttemptDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-muted">@log.AttemptDate.ToString("HH:mm:ss")</div>
+                                </td>
+                                <td>
+                                    @* ✅ แก้ไข Error: เรียกใช้ log.ShopId จาก Model โดยตรง *@
+                                    @if (log.ShopId == 3)
+                                    {
+                                        <span class="badge bg-info text-dark">น้ำปลาร้า</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">ลูกชิ้น</span>
+                                    }
+                                </td>
+                                <td class="text-start">
+                                    <div class="fw-bold small">@log.CustomerName</div>
+                                    <div class="text-muted" style="font-size: 0.75rem;">@log.PhoneNumber</div>
+                                </td>
+                                <td class="text-end fw-bold pe-3">฿@log.Amount.ToString("N2")</td>
+                                <td>
+                                    @if (log.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success rounded-pill px-2">ผ่าน</span>
+                                    }
+                                    else if (log.Status == "Duplicate")
+                                    {
+
+                                        <span class="badge bg-warning text-dark rounded-pill px-2">ซ้ำ</span>
+                                    }
+                                    else
+                                    {
+
+                                        <span class="badge bg-danger rounded-pill px-2">ไม่ผ่าน</span>
+                                    }
+                                </td>
+                                <td class="text-start small text-muted">@log.Reason</td>
+                                <td>
+                                    @* ✅ ใช้ LogId ในการลบ *@
+                                    <button class="btn btn-outline-danger btn-sm rounded-circle shadow-sm"
+                                            @onclick="() => ConfirmDelete(log.LogId)" title="ลบรายการ">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@* Modal Preview รูปภาพ *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.85); z-index: 2000;" @onclick="CloseModal">
+        <div class="modal-dialog modal-dialog-centered text-center">
+            <img src="@modalImageUrl" class="img-fluid rounded shadow-lg" style="max-height: 90vh;" />
+        </div>
+    </div>
+}
+
+@code {
+    private List<SlipAuditLog> logs = new();
+    private bool isLoading = true;
+    private string searchText = "";
+    private string filterStatus = "";
+    private int filterShopId = 0;
+    private DateTime startDate = DateTime.Today.AddDays(-7);
+    private DateTime endDate = DateTime.Today;
+    private bool showModal = false;
+    private string modalImageUrl = "";
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            var start = startDate.Date;
+            var end = endDate.Date.AddDays(1);
+
+            // กรองข้อมูลด้วย LINQ Query
+            var query = context.SlipAuditLogs.AsQueryable()
+                .Where(l => l.AttemptDate >= start && l.AttemptDate < end);
+
+            // กรองตามรหัสร้านค้า (ShopId)
+            if (filterShopId > 0)
+                query = query.Where(l => l.ShopId == filterShopId);
+
+            if (!string.IsNullOrEmpty(filterStatus))
+                query = query.Where(l => l.Status == filterStatus);
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+                query = query.Where(l => l.CustomerName.Contains(searchText) || l.PhoneNumber.Contains(searchText) || l.Reason.Contains(searchText));
+
+            logs = await query.OrderByDescending(l => l.AttemptDate).Take(100).ToListAsync();
+        }
+        catch (Exception ex) { Console.WriteLine($"LoadData Error: {ex.Message}"); }
+        finally { isLoading = false; }
+    }
+
+    private async Task ConfirmDelete(int logId)
+    {
+        bool isConfirmed = await JSRuntime.InvokeAsync<bool>("confirm", "⚠️ คุณต้องการลบรายการประวัตินี้หรือไม่?");
+        if (isConfirmed)
+        {
+            try
+            {
+                using var context = DbFactory.CreateDbContext();
+                var item = await context.SlipAuditLogs.FirstOrDefaultAsync(x => x.LogId == logId);
+                if (item != null)
+                {
+                    context.SlipAuditLogs.Remove(item);
+                    await context.SaveChangesAsync();
+                    await LoadData();
+                }
+            }
+            catch (Exception ex) { await JSRuntime.InvokeVoidAsync("alert", $"เกิดข้อผิดพลาด: {ex.Message}"); }
+        }
+    }
+
+    private void OpenImage(string url) { modalImageUrl = url; showModal = true; }
+    private void CloseModal() => showModal = false;
+}

@@ -1,0 +1,60 @@
+﻿@page "/maintenance"
+@layout SomwhangShop.Components.Layout.EmptyLayout
+
+<div class="maintenance-container">
+    <div class="content text-center fade-in">
+        <i class="bi bi-cone-striped display-1 text-warning mb-4 animate-bounce"></i>
+        <h1 class="fw-bold text-white mb-3">ร้านปิดปรับปรุงชั่วคราว</h1>
+        <p class="text-white-50 fs-5 mb-4">
+            เรากำลังอัปเกรดระบบเพื่อการบริการที่ดียิ่งขึ้น<br>
+            โปรดกลับมาใหม่ในอีกสักครู่...
+        </p>
+        <div class="spinner-border text-light" role="status"></div>
+    </div>
+</div>
+
+<style>
+    body {
+        margin: 0;
+        background: #1a1a2e;
+        overflow: hidden;
+    }
+
+    .maintenance-container {
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, #16213e, #1a1a2e);
+    }
+
+    .animate-bounce {
+        animation: bounce 2s infinite;
+    }
+
+    @@keyframes bounce {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-20px);
+        }
+    }
+
+    .fade-in {
+        animation: fadeIn 1s ease-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+</style>

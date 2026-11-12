@@ -1,0 +1,559 @@
+﻿@page "/admin/affiliate"
+@using SomwhangShop.Services
+@using SomwhangShop.Models
+@inject StatsService Stats
+@inject IJSRuntime JSRuntime
+
+<PageTitle>รายงานนายหน้า - Somwhang Shop</PageTitle>
+
+<div class="container-fluid py-4 px-md-5 bg-light min-vh-100 position-relative">
+
+    @* --- Header & Actions --- *@
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 animate-fade-down">
+        <div>
+            <div class="text-uppercase tracking-wide text-muted small fw-bold mb-1">Affiliate Performance</div>
+            <h2 class="fw-bold text-dark mb-0 d-flex align-items-center">
+                <i class="bi bi-graph-up-arrow text-primary me-3 bg-primary bg-opacity-10 p-2 rounded-3"></i>
+                รายงานยอดขายนายหน้า
+            </h2>
+        </div>
+
+        <div class="mt-3 mt-md-0 d-flex gap-2">
+            <button class="btn btn-white shadow-sm hover-lift text-muted" @onclick="LoadData">
+                <i class="bi bi-arrow-clockwise me-1"></i> รีเฟรช
+            </button>
+            <button class="btn btn-success shadow-sm hover-lift text-white px-3" @onclick="ExportToExcel" disabled="@(filteredData.Count == 0)">
+                <i class="bi bi-file-earmark-excel-fill me-2"></i>Export Excel
+            </button>
+        </div>
+    </div>
+
+    @* --- Dashboard Cards (Summary) --- *@
+    <div class="row g-3 mb-4 animate-fade-up">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-primary text-white position-relative overflow-hidden hover-lift">
+                <div class="card-body p-4 position-relative z-1">
+                    <p class="mb-1 opacity-75 text-uppercase small ls-1">ยอดขายรวม (Total Sales)</p>
+                    <h2 class="fw-bold mb-0 display-6">฿@filteredData.Sum(x => x.TotalSales).ToString("N0")</h2>
+                    <div class="mt-2 small opacity-75">
+                        <i class="bi bi-check-circle-fill me-1"></i> ยอดที่อนุมัติแล้ว
+                    </div>
+                </div>
+                <div class="decorative-circle"></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100 bg-white hover-lift">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <p class="text-muted mb-0 text-uppercase small fw-bold">จำนวนออเดอร์ (Orders)</p>
+                        <span class="badge bg-info bg-opacity-10 text-info">Completed</span>
+                    </div>
+                    <h2 class="fw-bold text-dark mb-0">@filteredData.Sum(x => x.TotalOrders).ToString("N0") <small class="fs-6 text-muted">รายการ</small></h2>
+                    <p class="text-muted small mt-2 mb-0">จำนวนคำสั่งซื้อทั้งหมดที่สำเร็จ</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100 bg-white hover-lift">
+                <div class="card-body p-4">
+                    <p class="text-muted mb-1 text-uppercase small fw-bold">นายหน้าที่แอคทีฟ (Active)</p>
+                    <h2 class="fw-bold text-dark mb-0">@filteredData.Select(x => x.AffiliateId).Distinct().Count() <small class="fs-6 text-muted">คน</small></h2>
+                    <p class="text-muted small mt-2 mb-0">มียอดขายในช่วงเวลานี้</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* --- Main Content Table --- *@
+    <div class="card border-0 shadow-sm animate-fade-up delay-100">
+        <div class="card-header bg-white py-3 border-0">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                <h5 class="mb-0 fw-bold text-secondary d-flex align-items-center text-nowrap">
+                    <i class="bi bi-table me-2"></i> รายการประจำเดือน
+                </h5>
+
+                @* Filter Section *@
+                <div class="d-flex flex-wrap gap-2 w-100 justify-content-lg-end">
+                    <div class="position-relative">
+                        <input type="month"
+                               class="form-control border-0 bg-light shadow-none text-secondary"
+                               style="min-width: 160px; border-radius: 20px;"
+                               value="@selectedMonth"
+                               @onchange="OnMonthChanged" />
+                    </div>
+
+                    <select class="form-select border-0 bg-light shadow-none"
+                            style="min-width: 180px; width: auto;"
+                            @bind="selectedAffiliate"
+                            @bind:after="FilterData">
+                        <option value="">-- นายหน้าทั้งหมด --</option>
+                        @foreach (var affiliate in uniqueAffiliates)
+                        {
+                            <option value="@affiliate">@affiliate</option>
+                        }
+                    </select>
+
+                    <div class="search-box flex-grow-1" style="min-width: 200px; max-width: 300px;">
+                        <i class="bi bi-search text-muted"></i>
+                        <input type="text" class="form-control border-0 bg-light"
+                               placeholder="ค้นหาเพิ่มเติม..."
+                               @bind="searchTerm"
+                               @bind:event="oninput"
+                               @onkeyup="FilterData" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="text-muted animate-pulse">กำลังประมวลผลข้อมูล...</p>
+                </div>
+            }
+            else if (filteredData.Count == 0)
+            {
+                <div class="text-center py-5">
+                    <div class="mb-3 p-3 bg-light rounded-circle d-inline-block">
+                        <i class="bi bi-inbox fs-1 text-muted opacity-50"></i>
+                    </div>
+                    <h5 class="text-muted">ไม่พบข้อมูล</h5>
+                    <p class="text-muted small">ลองเปลี่ยนตัวกรอง หรือยังไม่มีรายการขาย</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 custom-table">
+                        <thead class="bg-light text-secondary text-uppercase x-small">
+                            <tr>
+                                <th class="py-3 ps-4 border-0 rounded-start">เดือน (Month)</th>
+                                <th class="py-3 border-0">รหัสตัวแทน (Affiliate ID)</th>
+                                <th class="py-3 text-center border-0">จำนวนออเดอร์</th>
+                                <th class="py-3 text-end border-0">ยอดขาย (Sales)</th>
+                                <th class="py-3 text-center border-0 rounded-end" style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in filteredData)
+                            {
+                                <tr>
+                                    <td class="ps-4 fw-bold text-dark">
+                                        <div class="d-flex align-items-center">
+                                            <div class="icon-sq bg-primary bg-opacity-10 text-primary me-2 rounded">
+                                                <i class="bi bi-calendar-event"></i>
+                                            </div>
+                                            @item.SaleMonth
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-circle me-2 text-white bg-secondary">
+                                                @if (!string.IsNullOrEmpty(item.AffiliateId))
+                                                {
+                                                    @item.AffiliateId.Substring(0, 1).ToUpper()
+                                                }
+                                                else
+                                                {
+                                                    <span>?</span>
+                                                }
+                                            </div>
+                                            <span class="fw-medium text-dark">@item.AffiliateId</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border rounded-pill px-3">
+                                            @item.TotalOrders.ToString("N0")
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="text-primary fw-bold">฿@item.TotalSales.ToString("N2")</span>
+                                    </td>
+                                    <td class="text-center pe-3">
+                                        <button class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                                @onclick="() => OpenOrderDetails(item)">
+                                            <i class="bi bi-eye-fill me-1"></i> ดู
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="bg-light fw-bold text-dark border-top">
+                            <tr>
+                                <td colspan="2" class="ps-4 py-3 text-uppercase small text-muted">รวมทั้งหมด (@filteredData.Count รายการ)</td>
+                                <td class="text-center py-3">@filteredData.Sum(x => x.TotalOrders).ToString("N0")</td>
+                                <td class="text-end py-3 text-primary">฿@filteredData.Sum(x => x.TotalSales).ToString("N2")</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@* --- Modal สำหรับแสดงรายการออเดอร์ (ใช้ข้อมูลจริง) --- *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable animate-fade-down">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark">📦 รายการออเดอร์</h5>
+                        <p class="text-muted small mb-0">
+                            นายหน้า: <span class="text-primary fw-bold">@selectedReportItem?.AffiliateId</span> |
+                            เดือน: <span class="text-primary fw-bold">@selectedReportItem?.SaleMonth</span>
+                        </p>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isLoadingDetails)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p>
+                        </div>
+                    }
+                    else if (currentOrderList == null || currentOrderList.Count == 0)
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-basket fs-1 opacity-50"></i>
+                            <p class="mt-2">ไม่พบรายการออเดอร์ในช่วงเวลานี้</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle">
+                                <thead class="bg-light text-secondary small">
+                                    <tr>
+                                        <th>วันที่</th>
+                                        <th>เลขที่ออเดอร์</th>
+                                        <th>ลูกค้า</th>
+                                        <th>สถานะ</th>
+                                        <th class="text-end">ยอดเงิน</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var order in currentOrderList)
+                                    {
+                                        <tr>
+                                            <td>@order.OrderDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td><span class="badge bg-secondary font-monospace">@order.OrderId</span></td>
+                                            <td>@order.CustomerName</td>
+                                            <td>
+                                                @* แสดงสถานะแบบมีสี *@
+                                                @if (order.Status == "สำเร็จ")
+                                                {
+                                                    <span class="badge bg-success">@order.Status</span>
+                                                }
+                                                else if (order.Status.Contains("รอ"))
+                                                {
+
+                                                    <span class="badge bg-warning text-dark">@order.Status</span>
+                                                }
+                                                else
+                                                {
+
+                                                    <span class="badge bg-secondary">@order.Status</span>
+                                                }
+                                            </td>
+                                            <td class="text-end fw-bold text-primary">฿@order.TotalAmount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-light" @onclick="CloseModal">ปิดหน้าต่าง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* --- Script Export CSV --- *@
+<script>
+    window.downloadCSV = (content, fileName) => {
+        var blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement("a");
+        if (link.download !== undefined) {
+            var url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+</script>
+
+<style>
+    /* CSS เดิม */
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+    }
+
+    .btn-white {
+        background: white;
+        border: 1px solid #e5e7eb;
+    }
+
+    .hover-lift {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .hover-lift:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+        }
+
+    .decorative-circle {
+        position: absolute;
+        top: -30px;
+        right: -30px;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        pointer-events: none;
+    }
+
+    .search-box {
+        position: relative;
+    }
+
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.9rem;
+        }
+
+        .search-box input {
+            padding-left: 35px;
+            border-radius: 20px;
+        }
+
+    .form-select {
+        border-radius: 20px;
+        cursor: pointer;
+    }
+
+    .custom-table th {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        color: #6b7280;
+    }
+
+    .custom-table tbody tr {
+        transition: background-color 0.1s;
+    }
+
+        .custom-table tbody tr:hover {
+            background-color: #f9fafb;
+        }
+
+    .icon-sq {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .avatar-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.85rem;
+    }
+
+    .ls-1 {
+        letter-spacing: 1px;
+    }
+
+    .delay-100 {
+        animation-delay: 0.1s;
+    }
+
+    .animate-fade-down {
+        animation: fadeDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .animate-fade-up {
+        animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+
+    @@keyframes fadeDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes fadeUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private class AffiliateReportItem
+    {
+        public string SaleMonth { get; set; } = "";
+        public string AffiliateId { get; set; } = "";
+        public int TotalOrders { get; set; }
+        public decimal TotalSales { get; set; }
+    }
+
+    // ตัวแปรหลัก
+    private List<AffiliateReportItem> rawData = new List<AffiliateReportItem>();
+    private List<AffiliateReportItem> filteredData = new List<AffiliateReportItem>();
+    private List<string> uniqueAffiliates = new List<string>();
+
+    private string selectedAffiliate = "";
+    private string selectedMonth = "";
+    private string searchTerm = "";
+    private bool isLoading = true;
+
+    // ตัวแปรสำหรับ Modal
+    private bool showModal = false;
+    private bool isLoadingDetails = false;
+    private AffiliateReportItem? selectedReportItem;
+
+    // ✅ ใช้ Model จริง: List<Order>
+    private List<Order>? currentOrderList;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        var data = Stats.GetAffiliateMonthlySales();
+
+        rawData = data.Select(d => new AffiliateReportItem
+        {
+            SaleMonth = d.SaleMonth.ToString(),
+            AffiliateId = d.AffiliateId,
+            TotalOrders = d.TotalOrders,
+            TotalSales = d.TotalSales
+        }).ToList();
+
+        foreach (var item in rawData)
+        {
+            if (DateTime.TryParse(item.SaleMonth, out var dt))
+            {
+                item.SaleMonth = dt.ToString("yyyy-MM");
+            }
+        }
+
+        uniqueAffiliates = rawData.Select(x => x.AffiliateId).Distinct().OrderBy(x => x).ToList();
+
+        FilterData();
+        isLoading = false;
+    }
+
+    private void OnMonthChanged(ChangeEventArgs e)
+    {
+        selectedMonth = e.Value?.ToString() ?? "";
+        FilterData();
+    }
+
+    private void FilterData()
+    {
+        var query = rawData.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedMonth))
+        {
+            query = query.Where(x => x.SaleMonth == selectedMonth);
+        }
+
+        if (!string.IsNullOrEmpty(selectedAffiliate))
+        {
+            query = query.Where(x => x.AffiliateId == selectedAffiliate);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var lowerTerm = searchTerm.ToLower();
+            query = query.Where(x =>
+                x.AffiliateId.ToLower().Contains(lowerTerm) ||
+                x.SaleMonth.Contains(lowerTerm)
+            );
+        }
+
+        filteredData = query.ToList();
+    }
+
+    private async Task OpenOrderDetails(AffiliateReportItem item)
+    {
+        selectedReportItem = item;
+        showModal = true;
+        currentOrderList = null;
+        isLoadingDetails = true;
+
+        await Task.Yield(); // ให้ UI Render Loading ก่อน
+
+        try
+        {
+            // ✅ เรียกข้อมูลจริงจาก StatsService
+            currentOrderList = Stats.GetOrdersByAffiliateAndMonth(item.AffiliateId, item.SaleMonth);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching orders: {ex.Message}");
+            currentOrderList = new List<Order>();
+        }
+
+        isLoadingDetails = false;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task ExportToExcel()
+    {
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("Month,Affiliate ID,Total Orders,Total Sales");
+
+        foreach (var item in filteredData)
+        {
+            csv.AppendLine($"{item.SaleMonth},{item.AffiliateId},{item.TotalOrders},{item.TotalSales}");
+        }
+
+        var fileName = $"Affiliate_Sales_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("downloadCSV", csv.ToString(), fileName);
+    }
+}

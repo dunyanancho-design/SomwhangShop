@@ -1,0 +1,71 @@
+﻿<div class="mt-5 py-5 bg-light border-top">
+    <div class="container text-center">
+        <h6 class="text-uppercase fw-bold text-secondary mb-4" style="letter-spacing: 2px; font-size: 0.8rem;">
+            <i class="bi bi-shield-check me-1"></i> มาตรฐานคุณภาพที่คุณวางใจ
+        </h6>
+
+        @* แถวโลโก้มาตรฐานต่างๆ *@
+        <div class="d-flex justify-content-center align-items-center gap-4 flex-wrap opacity-75 grayscale-hover-container">
+
+            @* 1. DBD Registered *@
+            <div class="trust-badge" title="จดทะเบียนพาณิชย์อิเล็กทรอนิกส์">
+                <img src="/images/dbd_registered.png" alt="DBD Registered" height="45" class="shadow-sm rounded" />
+            </div>
+
+            @* 2. Food Pharmacy / อย. *@
+            <div class="trust-badge" title="Food Pharmacy มาตรฐานความปลอดภัย">
+                <img src="/images/food_pharmacy.jpg" alt="Food Pharmacy" height="55" />
+            </div>
+
+            @* 3. GMP *@
+            <div class="trust-badge" title="Good Manufacturing Practice">
+                <div class="badge-custom-icon">
+                    <span class="fw-bold">GMP</span>
+                </div>
+            </div>
+
+            @* 4. HACCP *@
+            <div class="trust-badge" title="HACCP Certified">
+                <div class="badge-custom-icon">
+                    <span class="fw-bold">HACCP</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-top w-50 mx-auto">
+            <small class="text-muted" style="font-size: 0.75rem;">
+                &copy; @DateTime.Now.Year สมหวัง ลูกชิ้นเนื้อแท้ & น้ำปลาร้า - อร่อย สะอาด ถูกหลักอนามัย
+            </small>
+        </div>
+    </div>
+</div>
+
+<style>
+    .grayscale-hover-container .trust-badge {
+        filter: grayscale(100%);
+        transition: all 0.3s ease;
+        opacity: 0.6;
+        cursor: pointer;
+    }
+    .grayscale-hover-container:hover .trust-badge {
+        filter: grayscale(0%);
+        opacity: 1;
+    }
+    .trust-badge:hover {
+        transform: scale(1.1);
+        z-index: 10;
+    }
+    .badge-custom-icon {
+        width: 55px;
+        height: 55px;
+        background: white;
+        border: 2px solid #6c757d;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        font-size: 0.8rem;
+    }
+</style>

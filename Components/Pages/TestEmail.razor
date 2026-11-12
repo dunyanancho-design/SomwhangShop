@@ -1,0 +1,84 @@
+﻿@page "/test-email"
+@using SomwhangShop.Services
+@using SomwhangShop.Models
+@inject EmailSender EmailSender
+
+<div class="container mt-5 fade-in">
+    <div class="card shadow p-4 border-0" style="max-width: 600px; margin: auto;">
+        <div class="text-center mb-4">
+            <h3 class="mt-3">📧 ทดสอบส่งอีเมล</h3>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert @(isSuccess ? "alert-success" : "alert-danger") mb-3" style="word-break: break-word;">
+                @statusMessage
+            </div>
+        }
+
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary btn-lg" @onclick="SendTestEmail" disabled="@isSending">
+                @if (isSending)
+                {
+                    <span>⏳ กำลังส่ง...</span>
+                }
+                else
+                {
+                    <span>🚀 ส่งอีเมลทดสอบ</span>
+                }
+            </button>
+        </div>
+
+        <div class="mt-3 text-center">
+            <small class="text-muted">ส่งไปที่: <strong>@myEmail</strong></small>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ✅ ประกาศตัวแปรให้ครบถ้วน
+    private bool isSending = false;
+    private bool isSuccess = false;
+    private string statusMessage = "";
+
+    // 👇 ตรวจสอบอีเมลตรงนี้อีกครั้งนะครับว่าเป็นของคุณ
+    private string myEmail = "alles.loschen@gmail.com";
+
+    private async Task SendTestEmail()
+    {
+        isSending = true;
+        statusMessage = "กำลังเชื่อมต่อ...";
+        StateHasChanged();
+
+        try
+        {
+            var mockItems = new List<CartItem>
+            {
+                new CartItem { ProductName = "สินค้าทดสอบ", Price = 100, Quantity = 1 }
+            };
+
+            await EmailSender.SendOrderConfirmationAsync(
+                customerEmail: myEmail,
+                customerName: "Tester",
+                orderId: "TEST-" + DateTime.Now.ToString("HHmm"),
+                items: mockItems,
+                totalAmount: 100,
+                shippingAddress: "Test Address"
+            );
+
+            isSuccess = true;
+            statusMessage = "✅ ส่งสำเร็จ! กรุณาเช็ค Inbox หรือ Junk Mail";
+        }
+        catch (Exception ex)
+        {
+            isSuccess = false;
+            // ✅ ดึงสาเหตุที่แท้จริง (Inner Exception) ออกมาโชว์
+            var realCause = ex.InnerException?.Message ?? ex.Message;
+            statusMessage = $"❌ ส่งไม่ผ่าน: {ex.Message} \n(สาเหตุ: {realCause})";
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+}

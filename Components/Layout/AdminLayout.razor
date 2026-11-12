@@ -1,0 +1,160 @@
+﻿@inherits LayoutComponentBase
+@using SomwhangShop.Services
+@inject AdminStateService AdminState
+@inject NavigationManager NavManager
+
+@if (AdminState.IsLoggedIn)
+{
+    <div class="d-flex flex-column min-vh-100">
+        @* ✅ Navbar *@
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow px-4">
+            <div class="container-fluid">
+                <span class="navbar-brand fw-bold d-flex align-items-center">
+                    <i class="bi bi-shield-lock-fill me-2 text-warning fs-4"></i>
+                    <span>ระบบหลังบ้าน</span>
+                </span>
+
+                <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <div class="@NavMenuCssClass" id="adminNavbar">
+                    <div class="d-flex gap-2 mx-auto py-2 py-lg-0 flex-wrap justify-content-center">
+
+                        @* 1. เมนูหลัก *@
+                        <a href="admin/dashboard" class="nav-link-custom @(IsActive("dashboard") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-bar-chart-line-fill me-1"></i> สถิติ
+                        </a>
+                        <a href="admin/orders" class="nav-link-custom @(IsActive("orders") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-receipt me-1"></i> คำสั่งซื้อ
+                        </a>
+                        <a href="admin/products" class="nav-link-custom @(IsActive("products") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-box-seam me-1"></i> สินค้า
+                        </a>
+                        <a href="admin/shops" class="nav-link-custom @(IsActive("shops") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-shop-window me-1"></i> ร้านค้า
+                        </a>
+
+                        <div class="vr bg-secondary mx-2 d-none d-lg-block"></div> @* เส้นแบ่ง *@
+
+                        @* 2. เมนู Chat Bot *@
+                        <a href="admin/facebook" class="nav-link-custom @(IsActive("facebook") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-robot me-1"></i> FB Bot
+                        </a>
+                        <a href="admin/line" class="nav-link-custom @(IsActive("line") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-line me-1"></i> LINE OA
+                        </a>
+
+                        <div class="vr bg-secondary mx-2 d-none d-lg-block"></div> @* เส้นแบ่ง *@
+
+                        @* ✅ 3. เมนูระบบสลิป & บัญชี (เพิ่มใหม่) *@
+                        <a href="admin/slip-config" class="nav-link-custom @(IsActive("slip-config") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-gear-wide-connected me-1"></i> ตั้งค่าสลิป
+                        </a>
+                        <a href="admin/slips" class="nav-link-custom @(IsActive("slips") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-qr-code-scan me-1"></i> ประวัติสลิป
+                        </a>
+                        <a href="admin/accounting" class="nav-link-custom @(IsActive("accounting") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-calculator me-1"></i> บัญชี
+                        </a>
+                        <a href="admin/affiliate" class="nav-link-custom @(IsActive("affiliate") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-calculator me-1"></i> นายหน้า
+                        </a>
+                        <a href="/admin/backup" class="nav-link-custom @(IsActive("admin-backup") ? "active" : "")" @onclick="CloseNavMenu">
+                            <i class="bi bi-calculator me-1"></i> Backup Data
+                        </a>
+                    </div>
+
+                    <button class="btn btn-sm btn-outline-danger d-flex align-items-center mt-2 mt-lg-0 mx-auto mx-lg-0" @onclick="Logout">
+                        <i class="bi bi-box-arrow-right me-2"></i> ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-grow-1 bg-light p-4">
+            <div class="container fade-in">
+                @Body
+            </div>
+        </main>
+    </div>
+}
+else
+{
+    @* หน้าโหลด (Spinner) *@
+    <div class="vh-100 d-flex align-items-center justify-content-center bg-white">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h6 class="text-muted fw-bold">กำลังตรวจสอบสิทธิ์...</h6>
+        </div>
+    </div>
+}
+
+<style>
+    .nav-link-custom {
+        color: rgba(255,255,255,0.7);
+        text-decoration: none;
+        padding: 0.5rem 0.8rem; /* ปรับลด padding เล็กน้อยให้พอดีจอ */
+        border-radius: 50px;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+        font-size: 0.9rem; /* ปรับขนาดตัวอักษร */
+    }
+
+        .nav-link-custom:hover {
+            color: #fff;
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .nav-link-custom.active {
+            color: #fff;
+            background-color: var(--bs-primary);
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+    .fade-in {
+        animation: fadeIn 0.4s ease-in-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string NavMenuCssClass => collapseNavMenu ? "collapse navbar-collapse" : "collapse navbar-collapse show";
+
+    private void ToggleNavMenu() { collapseNavMenu = !collapseNavMenu; }
+    private void CloseNavMenu() { collapseNavMenu = true; }
+
+    protected override void OnInitialized()
+    {
+        if (!AdminState.IsLoggedIn)
+        {
+            NavManager.NavigateTo("/admin/login");
+        }
+    }
+
+    void Logout()
+    {
+        AdminState.Logout();
+        NavManager.NavigateTo("/admin/login");
+    }
+
+    bool IsActive(string page)
+    {
+        return NavManager.Uri.Contains($"admin/{page}", StringComparison.OrdinalIgnoreCase);
+    }
+}

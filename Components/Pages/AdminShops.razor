@@ -1,0 +1,402 @@
+﻿@page "/admin/shops"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using Microsoft.EntityFrameworkCore
+@using SomwhangShop.Data
+@using SomwhangShop.Models
+@using SomwhangShop.Services
+
+@inject ShopService ShopService
+@inject FileUploadService FileUpload
+@inject IJSRuntime JSRuntime
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@rendermode InteractiveServer
+
+<div class="container py-4 fade-in">
+    @* --- ส่วนหัว --- *@
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div class="d-flex align-items-center">
+            <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+                <i class="bi bi-shop-window fs-4"></i>
+            </div>
+            <div>
+                <h2 class="fw-bold mb-0 text-dark">จัดการร้านค้า & ค่าส่ง</h2>
+                <p class="text-muted small mb-0">ตั้งค่าร้านค้า ข้อมูลการโอนเงิน และตารางค่าจัดส่ง</p>
+            </div>
+        </div>
+        <button class="btn btn-warning text-dark fw-bold rounded-pill px-4 shadow-sm" @onclick="CreateNewShop">
+            <i class="bi bi-plus-lg me-1"></i> เพิ่มร้านค้า
+        </button>
+    </div>
+
+    @* --- รายการร้านค้า --- *@
+    <div class="row g-4">
+        @if (shops == null)
+        {
+            <div class="col-12 text-center py-5"><div class="spinner-border text-warning"></div></div>
+        }
+        else
+        {
+            @foreach (var shop in shops)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm hover-shadow">
+                        <div class="position-relative">
+                            <img src="@(string.IsNullOrEmpty(shop.ImageUrl) ? "/images/placeholder.png" : shop.ImageUrl)"
+                                 class="card-img-top object-fit-cover" style="height: 180px;" alt="@shop.Name">
+                            <div class="position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-25 d-flex align-items-end p-3">
+                                <h5 class="text-white fw-bold text-shadow mb-0">@shop.Name</h5>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small line-clamp-2">@shop.Description</p>
+                            <div class="d-flex flex-column gap-2 small">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted"><i class="bi bi-link-45deg"></i> Link:</span>
+                                    <span class="fw-bold text-primary">/@shop.LinkUrl</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted"><i class="bi bi-box-seam"></i> คิดค่าส่งตาม:</span>
+                                    <span class="badge bg-light text-dark border">
+                                        @(shop.CalcType == "Weight" ? "น้ำหนัก (Kg)" : "จำนวน (ชิ้น)")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0 d-flex justify-content-between p-3">
+                            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" @onclick="() => EditShop(shop)">
+                                <i class="bi bi-gear-fill me-1"></i> ตั้งค่า
+                            </button>
+                            @if (!shop.IsActive)
+                            {
+                                <span class="badge bg-danger align-self-center">ปิดใช้งาน</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success align-self-center">เปิดใช้งาน</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @* --- Modal แก้ไขร้านค้า --- *@
+    @if (editingShop != null)
+    {
+        <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-shop me-2"></i>@(editingShop.Id == 0 ? "สร้างร้านค้าใหม่" : "ตั้งค่าร้านค้า")
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="() => editingShop = null"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <EditForm Model="editingShop" OnValidSubmit="SaveData">
+                            <DataAnnotationsValidator />
+
+                            <div class="row g-4">
+                                @* ฝั่งซ้าย: รูปภาพ *@
+                                <div class="col-lg-4 text-center border-end">
+                                    <h6 class="fw-bold mb-3 text-start">รูปปกร้านค้า</h6>
+                                    <div class="mb-3 position-relative">
+                                        <img src="@(string.IsNullOrEmpty(editingShop.ImageUrl) ? "/images/placeholder.png" : editingShop.ImageUrl)"
+                                             class="img-fluid rounded-3 shadow-sm mb-2" style="max-height: 200px;">
+                                        @if (isUploading)
+                                        {
+                                            <div class="spinner-border text-warning position-absolute top-50 start-50"></div>
+                                        }
+                                    </div>
+                                    <div class="mb-4">
+                                        <label class="btn btn-outline-secondary btn-sm w-100">
+                                            <i class="bi bi-upload me-1"></i> เปลี่ยนรูปปก
+                                            <InputFile OnChange="HandleShopImageUpload" hidden accept=".jpg,.png" />
+                                        </label>
+                                    </div>
+
+                                    <hr />
+
+                                    <h6 class="fw-bold mb-3 text-start">QR Code รับเงิน</h6>
+                                    <div class="mb-3">
+                                        <img src="@(string.IsNullOrEmpty(editingShop.QrCodeUrl) ? "/images/placeholder_qr.png" : editingShop.QrCodeUrl)"
+                                             class="img-thumbnail" style="width: 150px; height: 150px; object-fit: contain;">
+                                    </div>
+                                    <div>
+                                        <label class="btn btn-outline-success btn-sm w-100">
+                                            <i class="bi bi-qr-code me-1"></i> อัปโหลด QR
+                                            <InputFile OnChange="HandleQrCodeUpload" hidden accept=".jpg,.png" />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                @* ฝั่งขวา: ข้อมูลร้าน & ค่าส่ง *@
+                                <div class="col-lg-8">
+                                    <ul class="nav nav-tabs mb-3">
+                                        <li class="nav-item">
+                                            <button class="nav-link active fw-bold" type="button">ข้อมูลทั่วไป</button>
+                                        </li>
+                                    </ul>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-8">
+                                            <label class="form-label fw-bold">ชื่อร้านค้า</label>
+                                            <InputText class="form-control" @bind-Value="editingShop.Name" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">URL (ภาษาอังกฤษ)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">/shop/</span>
+                                                <InputText class="form-control" @bind-Value="editingShop.LinkUrl" />
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">รายละเอียดร้าน</label>
+                                            <InputTextArea class="form-control" @bind-Value="editingShop.Description" rows="2" />
+                                        </div>
+
+                                        <div class="col-12"><hr class="text-muted" /></div>
+
+                                        <h6 class="fw-bold text-primary"><i class="bi bi-wallet2 me-1"></i> ข้อมูลบัญชีรับเงิน</h6>
+                                        <div class="col-md-6">
+                                            <label class="form-label">เลขพร้อมเพย์ / เลขบัญชี</label>
+                                            <InputText class="form-control" @bind-Value="editingShop.PromptPayId" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">ชื่อบัญชี</label>
+                                            <InputText class="form-control" @bind-Value="editingShop.PromptPayName" />
+                                        </div>
+
+                                        <div class="col-12"><hr class="text-muted" /></div>
+
+                                        <div class="bg-light p-3 rounded border">
+                                            <h6 class="fw-bold text-success mb-3"><i class="bi bi-truck me-1"></i> ตั้งค่าการจัดส่ง</h6>
+
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">วิธีคำนวณ</label>
+                                                    <InputSelect class="form-select" @bind-Value="editingShop.CalcType">
+                                                        <option value="Weight">ตามน้ำหนัก (Kg)</option>
+                                                        <option value="Quantity">ตามจำนวน (ชิ้น)</option>
+                                                    </InputSelect>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">ค่าส่งพื้นฐาน (บาท)</label>
+                                                    <InputNumber class="form-control" @bind-Value="editingShop.BaseShippingFee" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold">ส่งฟรีเมื่อซื้อครบ</label>
+                                                    <InputNumber class="form-control" @bind-Value="editingShop.FreeThreshold" />
+                                                </div>
+                                            </div>
+
+                                            <h6 class="fw-bold text-dark mt-4 mb-2" style="font-size: 0.9rem;">
+                                                <i class="bi bi-list-ol"></i> ตารางเรทค่าส่ง (Tier Pricing)
+                                            </h6>
+                                            <div class="table-responsive bg-white border rounded">
+                                                <table class="table table-sm table-bordered text-center mb-0 align-middle">
+                                                    <thead class="bg-light">
+                                                        <tr>
+                                                            @* ✅ เพิ่มหัวตารางชื่อขนส่ง *@
+                                                            <th style="width: 25%;">ชื่อขนส่ง</th>
+                                                            <th>เริ่ม (@GetUnitLabel())</th>
+                                                            <th>ถึง (@GetUnitLabel())</th>
+                                                            <th>ราคา (บาท)</th>
+                                                            <th style="width: 50px;">ลบ</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var tier in editingTiers)
+                                                        {
+                                                            <tr>
+                                                                @* ✅ เพิ่มช่องกรอกชื่อขนส่ง *@
+                                                                <td>
+                                                                    <input type="text" class="form-control form-control-sm border-0"
+                                                                           @bind="tier.CourierName" placeholder="เช่น Flash" />
+                                                                </td>
+                                                                <td><input type="number" class="form-control form-control-sm text-center border-0" @bind="tier.MinWeight" step="0.1" /></td>
+                                                                <td><input type="number" class="form-control form-control-sm text-center border-0" @bind="tier.MaxWeight" step="0.1" /></td>
+                                                                <td><input type="number" class="form-control form-control-sm text-center border-0" @bind="tier.Price" /></td>
+                                                                <td>
+                                                                    <button type="button" class="btn btn-link text-danger p-0" @onclick="() => RemoveTier(tier)">
+                                                                        <i class="bi bi-x-circle-fill"></i>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                        @if (editingTiers.Count == 0)
+                                                        {
+                                                            <tr><td colspan="5" class="text-muted small py-2">ยังไม่มีตารางเรท (ใช้ค่าส่งพื้นฐาน)</td></tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div class="mt-2 text-end">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddTier">
+                                                    <i class="bi bi-plus-lg"></i> เพิ่มช่วงราคา
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12 mt-4">
+                                            <div class="form-check form-switch p-3 bg-white rounded border">
+                                                <InputCheckbox class="form-check-input" @bind-Value="editingShop.IsActive" />
+                                                <label class="form-check-label fw-bold">เปิดใช้งานร้านค้านี้</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-end gap-2 mt-4">
+                                        @if (editingShop.Id > 0)
+                                        {
+                                            <button type="button" class="btn btn-outline-danger me-auto" @onclick="() => DeleteShop(editingShop.Id)">
+                                                <i class="bi bi-trash"></i> ลบร้านค้า
+                                            </button>
+                                        }
+                                        <button type="button" class="btn btn-light" @onclick="() => editingShop = null">ยกเลิก</button>
+                                        <button type="submit" class="btn btn-warning fw-bold px-4">บันทึกข้อมูล</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    List<Shop> shops = new();
+    Shop? editingShop = null;
+    List<ShippingTier> editingTiers = new();
+    bool isUploading = false;
+
+    protected override void OnInitialized()
+    {
+        shops = ShopService.GetShops(activeOnly: false);
+    }
+
+    void CreateNewShop()
+    {
+        editingShop = new Shop { IsActive = true, BaseShippingFee = 50, FreeThreshold = 500, CalcType = "Weight" };
+        editingTiers = new List<ShippingTier>();
+    }
+
+    async void EditShop(Shop s)
+    {
+        editingShop = new Shop
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Description = s.Description,
+            ImageUrl = s.ImageUrl,
+            LinkUrl = s.LinkUrl,
+            PromptPayId = s.PromptPayId,
+            PromptPayName = s.PromptPayName,
+            QrCodeUrl = s.QrCodeUrl,
+            IsActive = s.IsActive,
+            DisplayOrder = s.DisplayOrder,
+            CalcType = s.CalcType,
+            FreeThreshold = s.FreeThreshold,
+            BaseShippingFee = s.BaseShippingFee
+        };
+
+        using var context = DbFactory.CreateDbContext();
+        editingTiers = await context.ShippingTiers
+                                    .Where(t => t.ShopId == s.Id)
+                                    .OrderBy(t => t.MinWeight)
+                                    .ToListAsync();
+        StateHasChanged();
+    }
+
+    void AddTier()
+    {
+        decimal nextMin = 0;
+        if (editingTiers.Any())
+        {
+            nextMin = editingTiers.Max(t => t.MaxWeight) + 0.1m;
+        }
+        // ✅ เพิ่ม CourierName="Flash" เป็นค่าเริ่มต้น
+        editingTiers.Add(new ShippingTier
+        {
+            MinWeight = nextMin,
+            MaxWeight = nextMin + 1,
+            Price = 0,
+            ShopId = editingShop.Id,
+            CourierName = "Flash"
+        });
+    }
+
+    void RemoveTier(ShippingTier tier)
+    {
+        editingTiers.Remove(tier);
+    }
+
+    string GetUnitLabel()
+    {
+        return editingShop?.CalcType == "Weight" ? "กก." : "ชิ้น";
+    }
+
+    async Task HandleShopImageUpload(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        try
+        {
+            string newUrl = await FileUpload.UploadFileAsync(e.File, "shops");
+            if (!string.IsNullOrEmpty(newUrl)) editingShop.ImageUrl = newUrl;
+        }
+        catch (Exception ex) { await JSRuntime.InvokeVoidAsync("alert", $"❌ Error: {ex.Message}"); }
+        finally { isUploading = false; }
+    }
+
+    async Task HandleQrCodeUpload(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        try
+        {
+            string newUrl = await FileUpload.UploadFileAsync(e.File, "qrcodes");
+            if (!string.IsNullOrEmpty(newUrl)) editingShop.QrCodeUrl = newUrl;
+        }
+        catch (Exception ex) { await JSRuntime.InvokeVoidAsync("alert", $"❌ Error: {ex.Message}"); }
+        finally { isUploading = false; }
+    }
+
+    async Task SaveData()
+    {
+        if (editingShop == null) return;
+
+        ShopService.SaveShop(editingShop);
+
+        if (editingShop.Id > 0)
+        {
+            using var context = DbFactory.CreateDbContext();
+            var oldTiers = context.ShippingTiers.Where(t => t.ShopId == editingShop.Id);
+            context.ShippingTiers.RemoveRange(oldTiers);
+
+            foreach (var t in editingTiers)
+            {
+                t.ShopId = editingShop.Id;
+                t.Id = 0;
+                context.ShippingTiers.Add(t);
+            }
+            await context.SaveChangesAsync();
+        }
+
+        editingShop = null;
+        shops = ShopService.GetShops(activeOnly: false);
+        await JSRuntime.InvokeVoidAsync("alert", "บันทึกข้อมูลเรียบร้อยแล้ว!");
+    }
+
+    async Task DeleteShop(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "⚠️ ยืนยันการลบร้านค้า? สินค้าในร้านจะหายไปด้วย"))
+        {
+            ShopService.DeleteShop(id);
+            editingShop = null;
+            shops = ShopService.GetShops(activeOnly: false);
+        }
+    }
+}

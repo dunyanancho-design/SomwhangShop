@@ -1,0 +1,363 @@
+﻿@page "/cart"
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using SomwhangShop.Services
+@using Microsoft.EntityFrameworkCore
+@using System.IO
+@using Microsoft.AspNetCore.Hosting
+
+@inject CartService CartService
+@inject OrderService OrderService
+@inject SlipVerificationService SlipService
+@inject ShopService ShopService
+@inject NavigationManager NavManager
+@inject TelegramService TelegramSender
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject ShippingService ShippingCalc
+@inject IWebHostEnvironment WebHostEnvironment
+@inject IJSRuntime JSRuntime
+
+@implements IDisposable
+
+<PageTitle>ตะกร้าสินค้า</PageTitle>
+
+@if (isProcessing)
+{
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+        <h4 class="text-dark fw-bold">กำลังดำเนินการ...</h4>
+        <p class="text-muted">กรุณารอสักครู่ ระบบกำลังตรวจสอบสลิปและบันทึกข้อมูล</p>
+    </div>
+}
+
+<div class="container py-4">
+    <div class="d-flex align-items-center mb-4">
+        <h3 class="mb-0"><i class="bi bi-cart4 text-primary me-2"></i>ตะกร้าสินค้า</h3>
+    </div>
+
+    @if (cartItems.Count == 0)
+    {
+        <div class="text-center py-5 bg-white shadow-sm rounded-4">
+            <i class="bi bi-cart-x display-1 text-muted opacity-25"></i>
+            <h4 class="mt-3 text-muted">ตะกร้าของคุณว่างเปล่า</h4>
+            <a href="/" class="btn btn-primary mt-3 px-4 rounded-pill">ไปเลือกซื้อสินค้า</a>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-8">
+                @* ส่วนรายการสินค้า *@
+                <div class="card shadow-sm border-0 rounded-4 mb-3">
+                    <div class="card-body p-0">
+                        @if (hasMixedShops)
+                        {
+                            <div class="alert alert-danger m-3 rounded-3 small">
+                                <i class="bi bi-exclamation-triangle-fill"></i> <strong>แจ้งเตือน:</strong> สินค้าคละร้าน กรุณาชำระทีละร้าน
+                            </div>
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-borderless align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="ps-4 py-3">สินค้า</th>
+                                        <th class="text-center py-3">ราคา</th>
+                                        <th class="text-center py-3">จำนวน</th>
+                                        <th class="text-end pe-4 py-3">รวม</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in cartItems)
+                                    {
+                                        <tr class="border-bottom">
+                                            <td class="ps-4 py-3">
+                                                <div class="d-flex align-items-center">
+                                                    <img src="@(string.IsNullOrEmpty(item.Product.ImageUrl) ? "/images/no-image.png" : item.Product.ImageUrl)"
+                                                         style="width: 60px; height: 60px; object-fit: cover;" class="rounded-3 shadow-sm me-3 border">
+                                                    <div>
+                                                        <h6 class="mb-0 fw-bold text-dark">@item.Product.Name</h6>
+                                                        <small class="text-muted">@item.Product.Category</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">@item.Product.Price.ToString("N0")</td>
+                                            <td class="text-center">
+                                                <div class="input-group input-group-sm shadow-sm mx-auto" style="width: 100px;">
+                                                    <button class="btn btn-outline-secondary" type="button" @onclick="() => DecreaseQty(item)" disabled="@isProcessing">-</button>
+                                                    <span class="form-control text-center bg-white">@item.Quantity</span>
+                                                    <button class="btn btn-outline-secondary" type="button" @onclick="() => IncreaseQty(item)" disabled="@isProcessing">+</button>
+                                                </div>
+                                            </td>
+                                            <td class="text-end pe-4 fw-bold text-primary">@item.TotalPrice.ToString("N0")</td>
+                                            <td class="text-end pe-3">
+                                                <button class="btn btn-link text-danger p-0" @onclick="() => RemoveItem(item.Product)" disabled="@isProcessing">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* ✅ ปรับปรุง: ส่วนเลือกการจัดส่ง (เพิ่ม DHL และแสดงราคาเปรียบเทียบ) *@
+                <div class="card shadow-sm border-0 rounded-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-truck me-2"></i>เลือกการจัดส่ง</h6>
+
+                        <div class="row g-3">
+                            @foreach (var courier in new[] { "Flash", "SPX", "DHL" })
+                            {
+                                <div class="col-md-4">
+                                    <label class="btn btn-outline-secondary w-100 p-3 text-start d-flex justify-content-between align-items-center @(selectedCourier == courier ? "active border-primary border-2" : "border-1")" style="height: 100%;">
+                                        <div>
+                                            <input type="radio" name="courier" class="d-none" checked="@(selectedCourier == courier)" @onchange='() => SelectCourier(courier)' />
+                                            @if (courier == "Flash")
+                                            {
+                                                <i class="bi bi-lightning-charge-fill text-warning me-2"></i>
+                                            }
+                                            else if (courier == "SPX")
+                                            {
+
+                                                <i class="bi bi-box-seam-fill text-danger me-2"></i>
+                                            }
+                                            else
+                                            {
+
+                                                <i class="bi bi-globe-asia-australia text-primary me-2"></i>
+                                            }
+                                            @courier
+                                        </div>
+                                        @* แสดงราคาแยกรายเจ้า *@
+                                        <span class="badge @(GetPrice(courier) == 0 ? "bg-success" : "bg-dark")">
+                                            @(GetPrice(courier) == 0 ? "ส่งฟรี" : $"฿{GetPrice(courier):N0}")
+                                        </span>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow border-0 rounded-4 position-sticky" style="top: 20px;">
+                    <div class="card-header bg-primary text-white py-3 rounded-top-4">
+                        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>สรุปการสั่งซื้อ</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        @* ยอดรวม *@
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">ยอดรวมสินค้า</span>
+                            <span class="fw-bold">@CartService.GetGrandTotal().ToString("N2") บาท</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 border-bottom pb-3">
+                            <span class="text-muted">ค่าจัดส่ง (@selectedCourier)</span>
+                            <span class="fw-bold text-success">@(shippingCost == 0 ? "ฟรี" : shippingCost.ToString("N2") + " บาท")</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-4 align-items-end">
+                            <span class="fs-5 fw-bold">ยอดสุทธิ</span>
+                            <span class="fs-4 fw-bold text-danger">@((CartService.GetGrandTotal() + shippingCost).ToString("N2")) บาท</span>
+                        </div>
+
+                        @* ข้อมูลลูกค้า *@
+                        <h6 class="mb-3 text-muted small uppercase fw-bold">ข้อมูลจัดส่ง</h6>
+                        <div class="mb-3"><input type="text" class="form-control" @bind="customerName" placeholder="ชื่อ-นามสกุล" /></div>
+                        <div class="mb-3"><input type="text" class="form-control" @bind="phoneNumber" placeholder="เบอร์โทร" /></div>
+                        <div class="mb-3"><input type="email" class="form-control" @bind="customerEmail" placeholder="อีเมล (ถ้ามี)" /></div>
+                        <div class="mb-4"><textarea class="form-control" rows="3" @bind="shippingAddress" placeholder="ที่อยู่..."></textarea></div>
+
+                        @* QR Code *@
+                        @if (currentShop != null && !hasMixedShops && !string.IsNullOrEmpty(currentShop.QrCodeUrl))
+                        {
+                            <div class="text-center mb-4 p-3 bg-light rounded-3">
+                                <h6 class="fw-bold text-primary mb-2">สแกนเพื่อชำระเงิน</h6>
+                                <img src="@currentShop.QrCodeUrl" class="img-fluid mb-2" style="max-height: 150px;" />
+                                <div class="small text-muted">@currentShop.PromptPayName</div>
+                            </div>
+                        }
+
+                        @* แนบสลิป *@
+                        <h6 class="mb-2 text-muted small fw-bold">หลักฐานการโอนเงิน</h6>
+                        <div class="mb-3">
+                            <label class="w-100 p-3 border rounded-3 cursor-pointer bg-light text-center position-relative shadow-sm" style="border: 2px dashed #dee2e6 !important;">
+                                <InputFile OnChange="HandleFileSelected" style="display:none;" accept="image/*" disabled="@isProcessing" />
+                                @if (string.IsNullOrEmpty(previewImage))
+                                {
+                                    <div class="text-muted small py-2">คลิกเพื่อแนบสลิป</div>
+                                }
+                                else
+                                {
+                                    <div class="position-relative">
+                                        <img src="@previewImage" style="max-height: 120px; border-radius: 8px;" />
+                                        @if (isSlipValid == true)
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success position-absolute top-0 end-0 fs-3"></i>
+                                        }
+                                    </div>
+                                }
+                            </label>
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="text-danger x-small mt-2">@errorMessage</div>
+                            }
+                        </div>
+
+                        <button class="btn btn-success w-100 py-3 fw-bold rounded-3 shadow" @onclick="VerifyAndPlaceOrder"
+                                disabled="@(isProcessing || hasMixedShops || currentShop == null || string.IsNullOrEmpty(previewImage))">
+                            ยืนยันการสั่งซื้อ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    List<CartItem> cartItems = new List<CartItem>();
+    SomwhangShop.Models.Shop? currentShop;
+    bool hasMixedShops = false;
+    string customerName = "";
+    string phoneNumber = "";
+    string customerEmail = "";
+    string shippingAddress = "";
+    string previewImage = "";
+    string affiliateId = "";
+    bool isProcessing = false;
+    string errorMessage = "";
+    bool? isSlipValid = null;
+    string selectedCourier = "Flash";
+    decimal shippingCost = 0;
+
+    // ✅ เพิ่มตัวแปรเก็บราคาเปรียบเทียบ
+    Dictionary<string, decimal> courierRates = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        cartItems = CartService.Items;
+        CartService.OnChange += async () => await InvokeAsync(async () => { LoadShopInfo(); await UpdateAllRates(); StateHasChanged(); });
+        LoadShopInfo();
+        await UpdateAllRates();
+        try { affiliateId = await LocalStorage.GetItemAsync<string>("ref") ?? ""; } catch { }
+    }
+
+    void LoadShopInfo()
+    {
+        if (cartItems.Count > 0)
+        {
+            int id = cartItems.First().Product.ShopId;
+            hasMixedShops = cartItems.Any(i => i.Product.ShopId != id);
+            currentShop = !hasMixedShops ? ShopService.GetShopById(id) : null;
+        }
+    }
+
+    private async Task IncreaseQty(CartItem item) { CartService.AddToCart(item.Product); LoadShopInfo(); await UpdateAllRates(); }
+    private async Task DecreaseQty(CartItem item) { CartService.DecreaseItem(item.Product); LoadShopInfo(); await UpdateAllRates(); }
+    private async Task RemoveItem(Product product) { CartService.RemoveFromCart(product); LoadShopInfo(); await UpdateAllRates(); }
+
+    // ✅ ฟังก์ชันคำนวณราคาทุกเจ้า เพื่อแสดงเปรียบเทียบ
+    async Task UpdateAllRates()
+    {
+        if (cartItems.Any())
+        {
+            foreach (var c in new[] { "Flash", "SPX", "DHL" })
+            {
+                courierRates[c] = await ShippingCalc.CalculateCostAsync(cartItems, c);
+            }
+            shippingCost = courierRates.ContainsKey(selectedCourier) ? courierRates[selectedCourier] : 50;
+        }
+    }
+
+    async Task SelectCourier(string courier)
+    {
+        selectedCourier = courier;
+        shippingCost = courierRates.ContainsKey(courier) ? courierRates[courier] : 50;
+        StateHasChanged();
+    }
+
+    decimal GetPrice(string c) => courierRates.ContainsKey(c) ? courierRates[c] : 50;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            errorMessage = "";
+            isSlipValid = null;
+            try
+            {
+                var resizedFile = await file.RequestImageFileAsync(file.ContentType, 1200, 1200);
+                using var ms = new MemoryStream();
+                await resizedFile.OpenReadStream(20 * 1024 * 1024).CopyToAsync(ms);
+                previewImage = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+            }
+            catch { errorMessage = "รูปภาพขัดข้อง"; }
+        }
+    }
+
+    private async Task VerifyAndPlaceOrder()
+    {
+        if (isProcessing) return;
+
+        if (string.IsNullOrWhiteSpace(customerName) || string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(shippingAddress))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "กรุณากรอกข้อมูลให้ครบถ้วน");
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            decimal grandTotal = CartService.GetGrandTotal() + shippingCost;
+
+            // ✅ Fix Error CS7036: ใส่ currentShop.Id เข้าไปเป็นพารามิเตอร์สุดท้าย
+            var result = await SlipService.VerifySlipAsync(previewImage, grandTotal, customerName, phoneNumber, currentShop?.Id ?? 0);
+
+            if (result.IsValid)
+            {
+                isSlipValid = true;
+                StateHasChanged();
+                await Task.Delay(500);
+
+                var newOrder = new Order
+                {
+                    OrderId = "ORD-" + DateTime.Now.ToString("yyMMddHHmmss"),
+                    CustomerName = customerName,
+                    PhoneNumber = phoneNumber,
+                    Email = customerEmail,
+                    ShippingAddress = shippingAddress,
+                    SlipImageUrl = result.SlipImageUrl,
+                    TotalAmount = grandTotal,
+                    ShippingCost = shippingCost,
+                    CourierName = selectedCourier,
+                    Items = new List<CartItem>(cartItems),
+                    Status = "ชำระเงินแล้ว",
+                    TransRef = result.TransRef,
+                    AffiliateId = affiliateId
+                };
+
+                await OrderService.PlaceOrder(newOrder);
+                _ = Task.Run(async () => { try { await TelegramSender.SendOrderNotificationAsync(newOrder); } catch { } });
+                CartService.ClearCart();
+                NavManager.NavigateTo($"/order-success/{newOrder.OrderId}");
+            }
+            else
+            {
+                isSlipValid = false;
+                errorMessage = result.Message;
+            }
+        }
+        catch (Exception ex) { errorMessage = $"ระบบขัดข้อง: {ex.Message}"; }
+        finally { isProcessing = false; StateHasChanged(); }
+    }
+
+    public void Dispose() { CartService.OnChange -= StateHasChanged; }
+}

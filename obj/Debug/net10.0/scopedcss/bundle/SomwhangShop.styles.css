@@ -1,0 +1,379 @@
+/* /Components/Layout/MainLayout.razor.rz.scp.css */
+.page[b-x893zn4v49] {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+main[b-x893zn4v49] {
+    flex: 1;
+}
+
+.sidebar[b-x893zn4v49] {
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+}
+
+.top-row[b-x893zn4v49] {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+    .top-row[b-x893zn4v49]  a, .top-row[b-x893zn4v49]  .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+    }
+
+    .top-row[b-x893zn4v49]  a:hover, .top-row[b-x893zn4v49]  .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .top-row[b-x893zn4v49]  a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+@media (max-width: 640.98px) {
+    .top-row[b-x893zn4v49] {
+        justify-content: space-between;
+    }
+
+    .top-row[b-x893zn4v49]  a, .top-row[b-x893zn4v49]  .btn-link {
+        margin-left: 0;
+    }
+}
+
+@media (min-width: 641px) {
+    .page[b-x893zn4v49] {
+        flex-direction: row;
+    }
+
+    .sidebar[b-x893zn4v49] {
+        width: 250px;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+    }
+
+    .top-row[b-x893zn4v49] {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .top-row.auth[b-x893zn4v49]  a:first-child {
+        flex: 1;
+        text-align: right;
+        width: 0;
+    }
+
+    .top-row[b-x893zn4v49], article[b-x893zn4v49] {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+
+#blazor-error-ui[b-x893zn4v49] {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss[b-x893zn4v49] {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+/* /Components/Layout/NavMenu.razor.rz.scp.css */
+/* NavMenu.razor.css - Fix Mobile Menu */
+
+/* พื้นหลัง Sidebar แบบไล่สี */
+.nav-scrollable[b-72f46ftmue] {
+    background: linear-gradient(180deg, #1a237e 0%, #283593 100%);
+    box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+}
+
+.navbar-toggler[b-72f46ftmue] {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 5px; /* ปรับให้เป็นสี่เหลี่ยมมนๆ หน่อย */
+    padding: 0.5rem;
+    transition: 0.3s;
+    color: white; /* สีไอคอน Hamburger */
+    position: absolute; /* จัดตำแหน่งปุ่ม */
+    top: 0.5rem;
+    right: 1rem;
+}
+
+    .navbar-toggler:hover[b-72f46ftmue] {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+.top-row[b-72f46ftmue] {
+    min-height: 3.5rem;
+    background-color: rgba(0,0,0,0.4); /* พื้นหลังส่วนหัวเมนู */
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.navbar-brand[b-72f46ftmue] {
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    color: white;
+}
+
+.bi[b-72f46ftmue] {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* จัดระยะห่างของเมนู */
+.nav-item[b-72f46ftmue] {
+    font-size: 1rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 5px;
+}
+
+    .nav-item:first-of-type[b-72f46ftmue] {
+        padding-top: 1rem;
+    }
+
+    .nav-item:last-of-type[b-72f46ftmue] {
+        padding-bottom: 1rem;
+    }
+
+    /* ดีไซน์ปุ่มลิงก์ */
+    .nav-item[b-72f46ftmue]  .nav-link {
+        color: rgba(255,255,255,0.7);
+        border-radius: 50px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        margin: 0 1rem;
+        padding-left: 1.5rem;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        border: none;
+        /* แก้ปัญหาตัวหนังสือลอย */
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+        .nav-item[b-72f46ftmue]  .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            transform: translateX(5px);
+        }
+
+        .nav-item[b-72f46ftmue]  .nav-link.active {
+            background-color: #ffffff;
+            color: #1a237e;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+
+/* 📱 ส่วนจัดการ Mobile Menu (จุดที่แก้ไข) */
+@media (max-width: 640.98px) {
+    /* ถ้ามีคลาส .collapse ให้ซ่อน (Default state) */
+    .nav-scrollable.collapse[b-72f46ftmue] {
+        display: none;
+    }
+
+    /* ถ้าไม่มีคลาส .collapse (คือกดเปิดแล้ว) ให้แสดง */
+    .nav-scrollable[b-72f46ftmue] {
+        display: block;
+        max-height: 75vh; /* จำกัดความสูงไม่ให้บังจอมิด */
+        overflow-y: auto;
+    }
+}
+
+/* 💻 ส่วนจัดการ Desktop */
+@media (min-width: 641px) {
+    .navbar-toggler[b-72f46ftmue] {
+        display: none;
+    }
+
+    .nav-scrollable[b-72f46ftmue] {
+        /* บนจอใหญ่ ให้แสดงตลอดเวลา */
+        display: block !important;
+        height: 100vh;
+        overflow-y: auto;
+    }
+
+    .collapse[b-72f46ftmue] {
+        /* บังคับแสดงบนจอใหญ่ แม้จะมีคลาส collapse ติดอยู่ */
+        display: block !important;
+    }
+}
+/* /Components/Layout/ReconnectModal.razor.rz.scp.css */
+.components-reconnect-first-attempt-visible[b-xmcnbar6kn],
+.components-reconnect-repeated-attempt-visible[b-xmcnbar6kn],
+.components-reconnect-failed-visible[b-xmcnbar6kn],
+.components-pause-visible[b-xmcnbar6kn],
+.components-resume-failed-visible[b-xmcnbar6kn],
+.components-rejoining-animation[b-xmcnbar6kn] {
+    display: none;
+}
+
+#components-reconnect-modal.components-reconnect-show .components-reconnect-first-attempt-visible[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-show .components-rejoining-animation[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-paused .components-pause-visible[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-resume-failed .components-resume-failed-visible[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-retrying[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-retrying .components-reconnect-repeated-attempt-visible[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-retrying .components-rejoining-animation[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-failed[b-xmcnbar6kn],
+#components-reconnect-modal.components-reconnect-failed .components-reconnect-failed-visible[b-xmcnbar6kn] {
+    display: block;
+}
+
+
+#components-reconnect-modal[b-xmcnbar6kn] {
+    background-color: white;
+    width: 20rem;
+    margin: 20vh auto;
+    padding: 2rem;
+    border: 0;
+    border-radius: 0.5rem;
+    box-shadow: 0 3px 6px 2px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: display 0.5s allow-discrete, overlay 0.5s allow-discrete;
+    animation: components-reconnect-modal-fadeOutOpacity-b-xmcnbar6kn 0.5s both;
+    &[open]
+
+{
+    animation: components-reconnect-modal-slideUp-b-xmcnbar6kn 1.5s cubic-bezier(.05, .89, .25, 1.02) 0.3s, components-reconnect-modal-fadeInOpacity-b-xmcnbar6kn 0.5s ease-in-out 0.3s;
+    animation-fill-mode: both;
+}
+
+}
+
+#components-reconnect-modal[b-xmcnbar6kn]::backdrop {
+    background-color: rgba(0, 0, 0, 0.4);
+    animation: components-reconnect-modal-fadeInOpacity-b-xmcnbar6kn 0.5s ease-in-out;
+    opacity: 1;
+}
+
+@keyframes components-reconnect-modal-slideUp-b-xmcnbar6kn {
+    0% {
+        transform: translateY(30px) scale(0.95);
+    }
+
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes components-reconnect-modal-fadeInOpacity-b-xmcnbar6kn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes components-reconnect-modal-fadeOutOpacity-b-xmcnbar6kn {
+    0% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+.components-reconnect-container[b-xmcnbar6kn] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+#components-reconnect-modal p[b-xmcnbar6kn] {
+    margin: 0;
+    text-align: center;
+}
+
+#components-reconnect-modal button[b-xmcnbar6kn] {
+    border: 0;
+    background-color: #6b9ed2;
+    color: white;
+    padding: 4px 24px;
+    border-radius: 4px;
+}
+
+    #components-reconnect-modal button:hover[b-xmcnbar6kn] {
+        background-color: #3b6ea2;
+    }
+
+    #components-reconnect-modal button:active[b-xmcnbar6kn] {
+        background-color: #6b9ed2;
+    }
+
+.components-rejoining-animation[b-xmcnbar6kn] {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+    .components-rejoining-animation div[b-xmcnbar6kn] {
+        position: absolute;
+        border: 3px solid #0087ff;
+        opacity: 1;
+        border-radius: 50%;
+        animation: components-rejoining-animation-b-xmcnbar6kn 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+    }
+
+        .components-rejoining-animation div:nth-child(2)[b-xmcnbar6kn] {
+            animation-delay: -0.5s;
+        }
+
+@keyframes components-rejoining-animation-b-xmcnbar6kn {
+    0% {
+        top: 40px;
+        left: 40px;
+        width: 0;
+        height: 0;
+        opacity: 0;
+    }
+
+    4.9% {
+        top: 40px;
+        left: 40px;
+        width: 0;
+        height: 0;
+        opacity: 0;
+    }
+
+    5% {
+        top: 40px;
+        left: 40px;
+        width: 0;
+        height: 0;
+        opacity: 1;
+    }
+
+    100% {
+        top: 0px;
+        left: 0px;
+        width: 80px;
+        height: 80px;
+        opacity: 0;
+    }
+}

@@ -1,0 +1,121 @@
+/* NavMenu.razor.css - Fix Mobile Menu */
+
+/* พื้นหลัง Sidebar แบบไล่สี */
+.nav-scrollable {
+    background: linear-gradient(180deg, #1a237e 0%, #283593 100%);
+    box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+}
+
+.navbar-toggler {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 5px; /* ปรับให้เป็นสี่เหลี่ยมมนๆ หน่อย */
+    padding: 0.5rem;
+    transition: 0.3s;
+    color: white; /* สีไอคอน Hamburger */
+    position: absolute; /* จัดตำแหน่งปุ่ม */
+    top: 0.5rem;
+    right: 1rem;
+}
+
+    .navbar-toggler:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+.top-row {
+    min-height: 3.5rem;
+    background-color: rgba(0,0,0,0.4); /* พื้นหลังส่วนหัวเมนู */
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.navbar-brand {
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    color: white;
+}
+
+.bi {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* จัดระยะห่างของเมนู */
+.nav-item {
+    font-size: 1rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 5px;
+}
+
+    .nav-item:first-of-type {
+        padding-top: 1rem;
+    }
+
+    .nav-item:last-of-type {
+        padding-bottom: 1rem;
+    }
+
+    /* ดีไซน์ปุ่มลิงก์ */
+    .nav-item ::deep .nav-link {
+        color: rgba(255,255,255,0.7);
+        border-radius: 50px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        margin: 0 1rem;
+        padding-left: 1.5rem;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        border: none;
+        /* แก้ปัญหาตัวหนังสือลอย */
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+        .nav-item ::deep .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            transform: translateX(5px);
+        }
+
+        .nav-item ::deep .nav-link.active {
+            background-color: #ffffff;
+            color: #1a237e;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+
+/* 📱 ส่วนจัดการ Mobile Menu (จุดที่แก้ไข) */
+@media (max-width: 640.98px) {
+    /* ถ้ามีคลาส .collapse ให้ซ่อน (Default state) */
+    .nav-scrollable.collapse {
+        display: none;
+    }
+
+    /* ถ้าไม่มีคลาส .collapse (คือกดเปิดแล้ว) ให้แสดง */
+    .nav-scrollable {
+        display: block;
+        max-height: 75vh; /* จำกัดความสูงไม่ให้บังจอมิด */
+        overflow-y: auto;
+    }
+}
+
+/* 💻 ส่วนจัดการ Desktop */
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .nav-scrollable {
+        /* บนจอใหญ่ ให้แสดงตลอดเวลา */
+        display: block !important;
+        height: 100vh;
+        overflow-y: auto;
+    }
+
+    .collapse {
+        /* บังคับแสดงบนจอใหญ่ แม้จะมีคลาส collapse ติดอยู่ */
+        display: block !important;
+    }
+}

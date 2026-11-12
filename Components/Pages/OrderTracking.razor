@@ -1,0 +1,227 @@
+﻿@page "/tracking"
+@using SomwhangShop.Data
+@using SomwhangShop.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@* ✅ เพิ่มบรรทัดนี้ เพื่อแก้ Error ครับ *@
+@inject IJSRuntime JSRuntime
+
+<PageTitle>ติดตามสถานะคำสั่งซื้อ - SomwhangShop</PageTitle>
+
+<div class="container py-5" style="max-width: 600px;">
+
+    @* --- ส่วนหัวค้นหา --- *@
+    <div class="text-center mb-5">
+        <h1 class="fw-bold text-primary"><i class="bi bi-box-seam-fill"></i> ติดตามสินค้า</h1>
+        <p class="text-muted">กรอก "เลขคำสั่งซื้อ" หรือ "เบอร์โทรศัพท์" เพื่อตรวจสอบสถานะ</p>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="input-group input-group-lg">
+                <input type="text" class="form-control bg-light" placeholder="เช่น ORD-123456 หรือ 0812345678"
+                       @bind="searchKeyword" @onkeyup="HandleEnter" />
+                <button class="btn btn-primary px-4 fw-bold" @onclick="SearchOrder">
+                    <i class="bi bi-search me-1"></i> ค้นหา
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-warning mt-3 mb-0 border-0 bg-warning bg-opacity-10 text-warning">
+                    <i class="bi bi-exclamation-circle me-1"></i> @errorMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    @* --- ส่วนแสดงผลลัพธ์ --- *@
+    @if (foundOrders != null && foundOrders.Any())
+    {
+        @foreach (var order in foundOrders)
+        {
+            <div class="card shadow border-0 mb-3 fade-in">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">เลขคำสั่งซื้อ</span>
+                        <div class="fw-bold text-primary">#@order.OrderId</div>
+                    </div>
+                    <div class="text-end">
+                        <span class="text-muted small">วันที่สั่งซื้อ</span>
+                        <div class="fw-bold">@order.OrderDate.ToString("d MMM yyyy")</div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+
+                    @* Progress Bar สถานะ *@
+                    <div class="position-relative m-4">
+                        <div class="progress" style="height: 2px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: @GetProgressWidth(order.Status)%"></div>
+                        </div>
+                        <div class="position-absolute top-0 start-0 translate-middle btn btn-sm rounded-pill @GetStatusClass(order.Status, 1)" style="width: 2rem; height:2rem;">1</div>
+                        <div class="position-absolute top-0 start-50 translate-middle btn btn-sm rounded-pill @GetStatusClass(order.Status, 2)" style="width: 2rem; height:2rem;">2</div>
+                        <div class="position-absolute top-0 start-100 translate-middle btn btn-sm rounded-pill @GetStatusClass(order.Status, 3)" style="width: 2rem; height:2rem;">3</div>
+
+                        <div class="d-flex justify-content-between mt-2 small text-muted fw-bold">
+                            <span>แจ้งโอน</span>
+                            <span>แพ็คสินค้า</span>
+                            <span>ส่งแล้ว</span>
+                        </div>
+                    </div>
+
+                    <hr class="my-4 border-light">
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="small text-muted">สถานะปัจจุบัน</label>
+                            <div>
+                                <span class="badge @GetBadgeClass(order.Status) px-3 py-2 rounded-pill">
+                                    @order.Status
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted">ยอดสุทธิ</label>
+                            <div class="fw-bold fs-5 text-dark">฿@order.TotalAmount.ToString("N0")</div>
+                        </div>
+
+                        @* ถ้าส่งแล้ว ให้โชว์เลขพัสดุ *@
+                        @if (!string.IsNullOrEmpty(order.TrackingNumber))
+                        {
+                            <div class="col-12 mt-3">
+                                <div class="bg-light p-3 rounded-3 border border-secondary border-opacity-10">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <i class="bi bi-truck text-primary"></i>
+                                        <span class="fw-bold text-dark">ข้อมูลการจัดส่ง</span>
+                                    </div>
+                                    <div class="text-muted small">ขนส่ง: @(string.IsNullOrEmpty(order.CourierName) ? "-" : order.CourierName)</div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <span class="fs-5 fw-bold text-primary tracking-wider">@order.TrackingNumber</span>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => CopyText(order.TrackingNumber)">
+                                            <i class="bi bi-clipboard"></i> คัดลอก
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* --- JavaScript สำหรับ Copy --- *@
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            alert('คัดลอกเลขพัสดุแล้ว: ' + text);
+        }, function(err) {
+            console.error('Could not copy text: ', err);
+        });
+    }
+</script>
+
+<style>
+    .tracking-wider {
+        letter-spacing: 1px;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private string searchKeyword = "";
+    private string errorMessage = "";
+    private List<Order> foundOrders = new List<Order>();
+
+    private async Task SearchOrder()
+    {
+        errorMessage = "";
+        foundOrders.Clear();
+
+        if (string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            errorMessage = "กรุณากรอกข้อมูลเพื่อค้นหา";
+            return;
+        }
+
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+
+            // ค้นหาจาก OrderId หรือ PhoneNumber
+            foundOrders = await context.Orders
+                .Where(o => o.OrderId == searchKeyword.Trim() || o.PhoneNumber == searchKeyword.Trim())
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+
+            if (!foundOrders.Any())
+            {
+                errorMessage = "ไม่พบข้อมูลคำสั่งซื้อ โปรดตรวจสอบความถูกต้อง";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล";
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchOrder();
+    }
+
+    private async Task CopyText(string text)
+    {
+        // ✅ ตอนนี้เรียกใช้ได้แล้ว เพราะ Inject เข้ามาแล้ว
+        await JSRuntime.InvokeVoidAsync("copyToClipboard", text);
+    }
+
+    // Helpers สำหรับ UI Status
+    private string GetProgressWidth(string status) => status switch
+    {
+        "รอตรวจสอบยอดเงิน" => "0",
+        "ชำระเงินแล้ว" => "50",
+        "จัดส่งแล้ว" or "จัดส่งเรียบร้อย" => "100",
+        _ => "0"
+    };
+
+    private string GetStatusClass(string status, int step)
+    {
+        int currentStep = status switch
+        {
+            "รอตรวจสอบยอดเงิน" => 1,
+            "ชำระเงินแล้ว" => 2,
+            "จัดส่งแล้ว" or "จัดส่งเรียบร้อย" => 3,
+            _ => 0
+        };
+        return step <= currentStep ? "btn-success" : "btn-secondary opacity-25";
+    }
+
+    private string GetBadgeClass(string status) => status switch
+    {
+        "รอตรวจสอบยอดเงิน" => "bg-warning text-dark",
+        "ชำระเงินแล้ว" => "bg-info text-dark",
+        "จัดส่งแล้ว" => "bg-primary",
+        "จัดส่งเรียบร้อย" => "bg-success",
+        "ยกเลิก" => "bg-danger",
+        "TEST" => "bg-secondary",
+        _ => "bg-secondary"
+    };
+}

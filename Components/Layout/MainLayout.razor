@@ -1,0 +1,109 @@
+﻿@inherits LayoutComponentBase
+@using Blazored.LocalStorage
+@using Microsoft.AspNetCore.WebUtilities
+@using SomwhangShop.Services
+@inject NavigationManager NavManager
+@inject ILocalStorageService LocalStorage
+@inject StatsService Stats
+@inject SiteStateService SiteState
+@implements IDisposable
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // 1. สมัครรับข้อมูลการเปลี่ยนแปลงสถานะ (เพื่อให้หน้ารีเฟรชทันทีที่กดปุ่มปิดร้าน)
+        SiteState.OnChange += StateHasChanged;
+
+        // 2. ตรวจสอบสถานะตอนเข้าเว็บครั้งแรก
+        CheckMaintenance();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // 3. ตรวจสอบสถานะซ้ำหลังเรนเดอร์ครั้งแรก
+            CheckMaintenance();
+
+            // --- 👇 โค้ดเดิมของคุณ (ระบบเก็บสถิติและ Affiliate) ---
+            try
+            {
+                // ✅ 1. นับยอดคนเข้าเว็บ (Track Site Visit)
+                var today = DateTime.Now.ToString("yyyy-MM-dd");
+                var lastVisit = await LocalStorage.GetItemAsync<string>("last_visit_date");
+
+                if (lastVisit != today)
+                {
+                    Stats.RecordVisit(); // บันทึกลง DB
+                    await LocalStorage.SetItemAsync("last_visit_date", today);
+                }
+
+                // ✅ 2. ระบบ Affiliate (Track Referrer)
+                var uri = NavManager.ToAbsoluteUri(NavManager.Uri);
+                if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("ref", out var refId))
+                {
+                    string affiliateCode = refId.ToString();
+                    if (!string.IsNullOrEmpty(affiliateCode))
+                    {
+                        // 2.1 บันทึก Ref ลงเครื่องลูกค้า
+                        await LocalStorage.SetItemAsync("ref", affiliateCode);
+
+                        // 2.2 นับยอดคลิกให้ Affiliate
+                        string trackKey = $"tracked_{affiliateCode}_{DateTime.Now:yyyyMMdd}";
+                        var isTracked = await LocalStorage.ContainKeyAsync(trackKey);
+
+                        if (!isTracked)
+                        {
+                            // แก้ไขเรียกให้ตรงกับ Service ของคุณ (ถ้า StatsService รับ parameter เดียวก็ใส่แค่นั้น)
+                            // ในที่นี้ผมใส่ให้รองรับตามโค้ดเดิมของคุณ
+                            Stats.RecordVisit(affiliateCode);
+
+                            await LocalStorage.SetItemAsync(trackKey, "1");
+                            Console.WriteLine($"✅ Affiliate Tracked: {affiliateCode}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Analytics Error: {ex.Message}");
+            }
+            // --- 👆 จบโค้ดเดิม ---
+        }
+    }
+
+    private void CheckMaintenance()
+    {
+        // ถ้าเปิดโหมดปรับปรุงอยู่ (IsMaintenanceMode = true)
+        if (SiteState.IsMaintenanceMode)
+        {
+            var currentUrl = NavManager.Uri.ToLower();
+
+            // เงื่อนไข:
+            // 1. ไม่ใช่หน้า maintenance (กัน Loop)
+            // 2. ไม่ใช่หน้า admin (เพื่อให้คุณยังเข้าหลังบ้านไปแก้โค้ดได้)
+            if (!currentUrl.Contains("maintenance") && !currentUrl.Contains("admin"))
+            {
+                NavManager.NavigateTo("/maintenance", true);
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        // ยกเลิกการสมัครเมื่อปิดหน้าเว็บ
+        SiteState.OnChange -= StateHasChanged;
+    }
+}

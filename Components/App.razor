@@ -1,0 +1,69 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["SomwhangShop.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+
+    @* ✅ 1. เพิ่ม Library Chart.js ตรงนี้ *@
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    @* ✅ 2. รวม Script ไว้ที่นี่ที่เดียว *@
+    <script>
+        // ฟังก์ชันโหลดกราฟ (Chart.js)
+        window.renderVisitChart = (labels, data) => {
+            const ctx = document.getElementById('visitsChart');
+            if (!ctx) return; // ป้องกัน Error ถ้าหา element ไม่เจอ
+
+            // ถ้ามีกราฟเก่าอยู่ ให้ทำลายทิ้งก่อนสร้างใหม่
+            if (window.myVisitChart) {
+                window.myVisitChart.destroy();
+            }
+
+            window.myVisitChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'จำนวนคนเข้าเว็บ',
+                        data: data,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        };
+
+        // ฟังก์ชันดาวน์โหลด Excel (อันเดิม)
+        window.saveAsFile = (fileName, byteBase64) => {
+            var link = document.createElement('a');
+            link.download = fileName;
+            link.href = "data:application/octet-stream;base64," + byteBase64;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+    </script>
+</body>
+</html>

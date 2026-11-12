@@ -1,0 +1,49 @@
+﻿@using SomwhangShop.Services
+@inject AdminStateService AdminState
+@rendermode InteractiveServer
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="">
+            <i class="bi bi-shop-window me-2"></i>Somwhang Shop
+        </a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <i class="bi bi-bag-heart-fill me-3 fs-5"></i> เลือกช้อปสินค้า
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="cart">
+                <i class="bi bi-cart-check-fill me-3 fs-5"></i> ตะกร้าของฉัน
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="tracking">
+                <span class="bi bi-box-seam-fill" aria-hidden="true"></span>&nbsp;ติดตามสินค้า
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+}
+
+@code {
+    private void Logout()
+    {
+        AdminState.Logout();
+        // ไม่ต้องสั่ง Refresh เพราะ Blazor จะรู้เองว่า State เปลี่ยนแล้วเมนูจะหายไปเอง
+    }
+}

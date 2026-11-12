@@ -1,0 +1,76 @@
+/* นำเข้าฟอนต์ Kanit จาก Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
+
+:root {
+    /* ธีมสีส้ม-แดง ให้ความรู้สึกหิวและกระตือรือร้น */
+    --bs-primary: #ff5722;
+    --bs-primary-rgb: 255, 87, 34;
+    --bs-secondary: #6c757d;
+    --bs-success: #28a745;
+    --bs-danger: #dc3545;
+    --bs-warning: #ffc107;
+    --bs-body-bg: #fdfdfd; /* พื้นหลังสีขาวอมเทานิดๆ สบายตา */
+}
+
+body {
+    font-family: 'Kanit', sans-serif; /* บังคับใช้ฟอนต์นี้ทั้งเว็บ */
+    background-color: var(--bs-body-bg);
+}
+
+/* ปรับแต่ง Card ให้ดูลอยมีมิติ (Modern Card) */
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+/* เอฟเฟกต์ตอนเอาเมาส์ชี้การ์ดสินค้า */
+.hover-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+/* ปุ่มกดต่างๆ ให้มนและดูนุ่มนวล */
+.btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 10px 20px;
+    transition: all 0.2s;
+}
+
+    .btn:hover {
+        transform: translateY(-1px);
+    }
+
+/* ช่องกรอกข้อมูล (Input) */
+.form-control {
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+    .form-control:focus {
+        box-shadow: 0 0 0 4px rgba(255, 87, 34, 0.15); /* เงาสีส้มจางๆ */
+        border-color: #ff5722;
+    }
+
+/* แถบเมนูซ้าย (Sidebar) - ปรับให้เข้มขึ้น */
+.sidebar {
+    background-image: linear-gradient(180deg, #212529 0%, #343a40 100%);
+}
+
+/* Animation สำหรับปุ่มตะกร้าเด้งดึ๋ง */
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.animate-bounce {
+    animation: bounce 2s infinite;
+}

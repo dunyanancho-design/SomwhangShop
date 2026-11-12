@@ -1,0 +1,282 @@
+﻿@page "/admin/products"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using SomwhangShop.Models
+@using SomwhangShop.Services
+@inject ProductService ProductService
+@inject ShopService ShopService
+@inject FileUploadService FileUpload
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="container py-4 fade-in">
+    @* --- ส่วนหัว --- *@
+    <div class="d-flex align-items-center mb-4">
+        <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+            <i class="bi bi-box-seam-fill fs-4"></i>
+        </div>
+        <div>
+            <h2 class="fw-bold mb-0 text-dark">จัดการสินค้า</h2>
+            <p class="text-muted small mb-0">เพิ่ม ลบ แก้ไข รายการสินค้าและรูปภาพ</p>
+        </div>
+    </div>
+
+    @* --- ส่วนเลือกร้านค้า --- *@
+    <div class="card border-0 shadow-sm mb-4 bg-white">
+        <div class="card-body d-flex align-items-center p-3">
+            <i class="bi bi-shop text-muted me-3 fs-4"></i>
+            <div class="flex-grow-1">
+                <select class="form-select border-0 bg-light fw-bold text-dark py-2" @onchange="OnShopSelected" style="cursor: pointer;">
+                    <option value="0">-- เลือกสินค้าจากร้าน --</option>
+                    @foreach (var shop in shops)
+                    {
+                        <option value="@shop.Id">@shop.Name</option>
+                    }
+                </select>
+            </div>
+            @if (selectedShopId > 0)
+            {
+                <button class="btn btn-primary rounded-pill px-4 ms-3 shadow-sm" @onclick="CreateNewProduct">
+                    <i class="bi bi-plus-lg me-1"></i> เพิ่มสินค้าใหม่
+                </button>
+            }
+        </div>
+    </div>
+
+    @* --- ตารางรายการสินค้า --- *@
+    @if (products == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (products.Count == 0)
+    {
+        <div class="text-center py-5 text-muted border rounded-3 bg-light">
+            <i class="bi bi-inbox display-4 mb-3 d-block opacity-50"></i>
+            ยังไม่มีสินค้าในร้านนี้
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var p in products)
+            {
+                <div class="col-md-3 col-sm-6">
+                    <div class="card h-100 border-0 shadow-sm hover-shadow transition-card">
+                        <div class="position-relative">
+                            <img src="@(string.IsNullOrEmpty(p.ImageUrl) ? "/images/placeholder.png" : p.ImageUrl)"
+                                 class="card-img-top object-fit-cover" style="height: 200px;" alt="@p.Name">
+                            <span class="position-absolute top-0 end-0 m-2 badge @(p.IsActive ? "bg-success" : "bg-danger") shadow-sm">
+                                @(p.IsActive ? "พร้อมขาย" : "ปิดรับ")
+                            </span>
+                            @if (p.StockQuantity <= 5)
+                            {
+                                <span class="position-absolute bottom-0 start-0 m-2 badge bg-warning text-dark shadow-sm">
+                                    เหลือ @p.StockQuantity
+                                </span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <h6 class="fw-bold text-truncate" title="@p.Name">@p.Name</h6>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-primary fw-bold">฿@p.Price.ToString("N0")</span>
+                                <small class="text-muted">@p.Category</small>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0 d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-warning flex-grow-1" @onclick="() => EditProduct(p)">
+                                <i class="bi bi-pencil"></i> แก้ไข
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteProduct(p.Id)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* --- Modal ฟอร์มแก้ไขสินค้า --- *@
+    @if (editingProduct != null)
+    {
+        <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi bi-box-seam me-2"></i>@(editingProduct.Id == 0 ? "เพิ่มสินค้าใหม่" : "แก้ไขสินค้า")
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="() => editingProduct = null"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <EditForm Model="editingProduct" OnValidSubmit="SaveData">
+                            <DataAnnotationsValidator />
+                            <div class="row g-3">
+                                @* รูปภาพ *@
+                                <div class="col-md-4 text-center">
+                                    <div class="mb-3 position-relative group-upload">
+                                        <img src="@(string.IsNullOrEmpty(editingProduct.ImageUrl) ? "/images/placeholder.png" : editingProduct.ImageUrl)"
+                                             class="img-thumbnail rounded-3 shadow-sm" style="width: 100%; height: 200px; object-fit: cover;">
+
+                                        @if (isUploading)
+                                        {
+                                            <div class="position-absolute top-50 start-50 translate-middle">
+                                                <div class="spinner-border text-primary" role="status"></div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="d-grid">
+                                        <label class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-camera me-1"></i> อัปโหลดรูป
+                                            <InputFile OnChange="HandleProductImageUpload" hidden accept=".jpg,.jpeg,.png,.gif" />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                @* ข้อมูลสินค้า *@
+                                <div class="col-md-8">
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">ชื่อสินค้า</label>
+                                            <InputText class="form-control" @bind-Value="editingProduct.Name" placeholder="เช่น ลูกชิ้นเนื้อล้วน 1 กก." />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">หมวดหมู่</label>
+                                            <InputText class="form-control" @bind-Value="editingProduct.Category" placeholder="เช่น ลูกชิ้น, น้ำจิ้ม" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">ราคา (บาท)</label>
+                                            <InputNumber class="form-control" @bind-Value="editingProduct.Price" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">สต็อกสินค้า</label>
+                                            <InputNumber class="form-control" @bind-Value="editingProduct.StockQuantity" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold">น้ำหนัก (Kg/ชิ้น)</label>
+                                            <InputNumber class="form-control" @bind-Value="editingProduct.Weight" Step="0.1" />
+                                            <small class="text-muted" style="font-size: 0.75rem;">*ใช้คำนวณค่าส่ง</small>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold">รายละเอียด</label>
+                                            <InputTextArea class="form-control" @bind-Value="editingProduct.Description" rows="3" />
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check form-switch">
+                                                <InputCheckbox class="form-check-input" @bind-Value="editingProduct.IsActive" />
+                                                <label class="form-check-label">เปิดขายสินค้านี้</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-footer border-0 px-0 pb-0 mt-3">
+                                <button type="button" class="btn btn-light" @onclick="() => editingProduct = null">ยกเลิก</button>
+                                <button type="submit" class="btn btn-primary px-4">บันทึกข้อมูล</button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    List<Shop> shops = new();
+    List<Product> products = null;
+    Product? editingProduct = null;
+    int selectedShopId = 0;
+    bool isUploading = false;
+
+    protected override void OnInitialized()
+    {
+        shops = ShopService.GetShops();
+    }
+
+    void OnShopSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            selectedShopId = id;
+            LoadProducts();
+        }
+    }
+
+    void LoadProducts()
+    {
+        if (selectedShopId > 0)
+        {
+            products = ProductService.GetProducts(selectedShopId);
+        }
+        else
+        {
+            products = new List<Product>();
+        }
+    }
+
+    void CreateNewProduct()
+    {
+        editingProduct = new Product { ShopId = selectedShopId, IsActive = true, StockQuantity = 100 };
+    }
+
+    void EditProduct(Product p)
+    {
+        // Clone object เพื่อไม่ให้กระทบตัวจริงใน list จนกว่าจะกดบันทึก
+        editingProduct = new Product
+        {
+            Id = p.Id,
+            ShopId = p.ShopId,
+            Name = p.Name,
+            Price = p.Price,
+            Description = p.Description,
+            ImageUrl = p.ImageUrl,
+            Category = p.Category,
+            IsActive = p.IsActive,
+            StockQuantity = p.StockQuantity,
+            Weight = p.Weight
+        };
+    }
+
+    // ✅ ฟังก์ชันอัปโหลดรูปที่เพิ่มความปลอดภัยแล้ว
+    async Task HandleProductImageUpload(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        try
+        {
+            string newUrl = await FileUpload.UploadFileAsync(e.File, "products");
+            if (!string.IsNullOrEmpty(newUrl))
+            {
+                editingProduct.ImageUrl = newUrl;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"❌ อัปโหลดไม่ผ่าน: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    void SaveData()
+    {
+        if (selectedShopId == 0 || editingProduct == null) return;
+
+        editingProduct.ShopId = selectedShopId; // ย้ำ ShopId อีกที
+        ProductService.SaveProduct(editingProduct);
+
+        editingProduct = null; // ปิด Modal
+        LoadProducts(); // โหลดข้อมูลใหม่
+    }
+
+    async Task DeleteProduct(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "ยืนยันที่จะลบสินค้านี้?"))
+        {
+            ProductService.DeleteProduct(id);
+            LoadProducts();
+        }
+    }
+}

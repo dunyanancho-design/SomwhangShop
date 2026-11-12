@@ -1,0 +1,222 @@
+﻿@page "/checkout"
+@using Microsoft.EntityFrameworkCore
+@using SomwhangShop.Models
+@using SomwhangShop.Services
+@using SomwhangShop.Data
+
+@* ปิด Pre-render เพื่อแก้ปัญหา LocalStorage และจอขาว *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@inject CartService CartService
+@inject NavigationManager NavManager
+@inject EmailSender EmailSender
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+
+<div class="container mt-4 mb-5 fade-in">
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 text-primary"><i class="bi bi-geo-alt-fill me-2"></i>ที่อยู่จัดส่งสินค้า</h5>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="@orderModel" OnValidSubmit="PlaceOrder">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="mb-3">
+                            <label class="form-label">ชื่อ-นามสกุล <span class="text-danger">*</span></label>
+                            <InputText @bind-Value="orderModel.CustomerName" class="form-control" placeholder="ระบุชื่อจริง นามสกุล" />
+                            <ValidationMessage For="@(() => orderModel.CustomerName)" />
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">เบอร์โทรศัพท์ <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="orderModel.PhoneNumber" class="form-control" placeholder="08x-xxxxxxx" />
+                                <ValidationMessage For="@(() => orderModel.PhoneNumber)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">อีเมล (เพื่อรับใบสั่งซื้อ)</label>
+                                <InputText @bind-Value="orderModel.Email" class="form-control" placeholder="name@example.com" />
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ที่อยู่จัดส่ง <span class="text-danger">*</span></label>
+                            <InputTextArea @bind-Value="orderModel.ShippingAddress" class="form-control" rows="3" placeholder="บ้านเลขที่, ถนน, แขวง/ตำบล, เขต/อำเภอ, จังหวัด, รหัสไปรษณีย์" />
+                            <ValidationMessage For="@(() => orderModel.ShippingAddress)" />
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-basket me-2"></i>สรุปคำสั่งซื้อ</h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @if (cartItems.Count == 0)
+                        {
+                            <li class="list-group-item text-center text-muted py-4">
+                                ไม่มีสินค้าในตะกร้า
+                            </li>
+                        }
+                        else
+                        {
+                            @foreach (var item in cartItems)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="my-0">@(string.IsNullOrEmpty(item.ProductName) ? item.Product.Name : item.ProductName)</h6>
+                                        <small class="text-muted">จำนวน: @item.Quantity ชิ้น</small>
+                                    </div>
+                                    @* แก้ไข: ดึงราคาให้ถูกต้อง *@
+                                    <span class="text-muted">฿@((item.Product.Price * item.Quantity).ToString("N0"))</span>
+                                </li>
+                            }
+                        }
+                        <li class="list-group-item d-flex justify-content-between bg-light">
+                            <span>ราคารวม (Total)</span>
+                            <strong class="text-primary fs-5">฿@totalAmount.ToString("N0")</strong>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer bg-white p-3">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger mb-3">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        </div>
+                    }
+
+                    <button class="btn btn-success btn-lg w-100 py-3 fw-bold" @onclick="PlaceOrder" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        
+                            <span>กำลังบันทึกข้อมูล...</span>
+                        }
+                        else
+                        {
+                            <span><i class="bi bi-check-circle-fill me-2"></i> ยืนยันการสั่งซื้อ</span>
+                        }
+                    </button>
+                    <a href="cart" class="btn btn-outline-secondary w-100 mt-2">กลับไปแก้ไขตะกร้า</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<CartItem> cartItems = new();
+    private decimal totalAmount = 0;
+    private bool isProcessing = false;
+    private Order orderModel = new Order();
+    private string errorMessage = ""; // ตัวแปรเก็บ Error
+
+    protected override void OnInitialized()
+    {
+        cartItems = CartService.Items;
+
+        // 👇 ปิดบรรทัดนี้ไว้ชั่วคราว เพื่อให้คุณเข้าหน้า Checkout ได้แม้ตะกร้าว่าง (เพื่อทดสอบปุ่ม)
+        // if (cartItems.Count == 0)
+        // {
+        //    NavManager.NavigateTo("/");
+        //    return;
+        // }
+
+        totalAmount = CartService.GetGrandTotal();
+    }
+
+    private async Task PlaceOrder()
+    {
+        errorMessage = ""; // ล้าง Error เก่าก่อน
+
+        // Validation แบบ Manual
+        if (string.IsNullOrWhiteSpace(orderModel.CustomerName) ||
+            string.IsNullOrWhiteSpace(orderModel.PhoneNumber) ||
+            string.IsNullOrWhiteSpace(orderModel.ShippingAddress))
+        {
+            errorMessage = "กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน";
+            return;
+        }
+
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+
+            // 1. สร้างหัวบิล (Order Header)
+            var newOrder = new Order
+            {
+                OrderId = "ORD-" + DateTime.Now.ToString("yyMMddHHmmss"),
+                OrderDate = DateTime.Now,
+                Status = "Pending",
+                TotalAmount = totalAmount,
+                CustomerName = orderModel.CustomerName,
+                PhoneNumber = orderModel.PhoneNumber,
+                Email = orderModel.Email,
+                ShippingAddress = orderModel.ShippingAddress
+            };
+
+            context.Orders.Add(newOrder);
+
+            // 2. บันทึกรายการสินค้า (Order Items)
+            // วนลูปสร้าง OrderItem ทีละตัว เพราะเราไม่ได้ Map List<CartItem> ลง DB
+            foreach (var item in cartItems)
+            {
+                var detail = new SomwhangShop.Models.OrderItem
+                {
+                    OrderId = newOrder.OrderId,
+                    // ดึงชื่อสินค้า: ถ้าใน CartItem ไม่มีชื่อ ให้ไปเอาจาก Product
+                    ProductName = string.IsNullOrEmpty(item.ProductName) ? item.Product.Name : item.ProductName,
+                    Price = item.Product.Price,
+                    Quantity = item.Quantity,
+                    TotalPrice = item.Product.Price * item.Quantity
+                };
+                context.OrderItems.Add(detail);
+            }
+
+            // 3. บันทึกลงฐานข้อมูลจริง
+            await context.SaveChangesAsync();
+
+            // 4. ส่งอีเมล (แยก Try-Catch เพื่อไม่ให้กระทบการสั่งซื้อหากเมลส่งไม่ผ่าน)
+            try
+            {
+                string emailToSend = !string.IsNullOrWhiteSpace(orderModel.Email) ? orderModel.Email : "customer@somwhang.shop";
+
+                await EmailSender.SendOrderConfirmationAsync(
+                    customerEmail: emailToSend,
+                    customerName: newOrder.CustomerName,
+                    orderId: newOrder.OrderId,
+                    items: cartItems,
+                    totalAmount: totalAmount,
+                    shippingAddress: newOrder.ShippingAddress
+                );
+            }
+            catch (Exception emailEx)
+            {
+                Console.WriteLine($"ส่งเมลไม่ผ่าน: {emailEx.Message}");
+            }
+
+            // 5. ล้างตะกร้าและย้ายหน้า
+            CartService.ClearCart();
+            NavManager.NavigateTo("/orders"); // หรือหน้า Success ที่คุณทำไว้
+        }
+        catch (Exception ex)
+        {
+            // แสดง Error บนหน้าจอให้เห็นชัดๆ
+            errorMessage = $"เกิดข้อผิดพลาด: {ex.Message} {(ex.InnerException != null ? " | " + ex.InnerException.Message : "")}";
+            Console.WriteLine(errorMessage);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

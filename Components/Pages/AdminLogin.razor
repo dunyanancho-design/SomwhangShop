@@ -1,0 +1,54 @@
+﻿@page "/admin/login"
+@using SomwhangShop.Services
+@inject AdminStateService AdminState
+@inject NavigationManager NavManager
+@inject IConfiguration Config
+@rendermode InteractiveServer
+
+<div class="container py-5 mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <div class="card shadow border-0">
+                <div class="card-header bg-dark text-white text-center fw-bold">
+                    🔐 เข้าสู่ระบบหลังบ้าน (Secure)
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger text-center small">@errorMessage</div>
+                    }
+
+                    <div class="mb-3">
+                        <label>รหัสผ่าน</label>
+                        <input type="password" class="form-control text-center" @bind="password" placeholder="••••••" />
+                    </div>
+
+                    <button class="btn btn-primary w-100" @onclick="HandleLogin">
+                        ยืนยัน
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    string password = "";
+    string errorMessage = "";
+
+    private void HandleLogin()
+    {
+        string correctPassword = Config["AdminSettings:Password"] ?? "9999";
+
+        if (password == correctPassword)
+        {
+            // ✅ เปลี่ยนมาใช้ Service ฝั่ง Server แทน
+            AdminState.Login();
+            NavManager.NavigateTo("/admin/orders");
+        }
+        else
+        {
+            errorMessage = "รหัสผ่านไม่ถูกต้อง";
+        }
+    }
+}

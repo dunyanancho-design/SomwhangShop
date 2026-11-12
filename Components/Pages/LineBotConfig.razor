@@ -1,0 +1,316 @@
+﻿@page "/admin/line"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+@* ✅ แก้ปัญหาชื่อชนกัน: ตั้งชื่อเล่นให้ Model ว่า "LineBotModel" *@
+@using LineBotModel = SomwhangShop.Models.LineBotConfig
+
+<div class="container-fluid py-4" style="max-width: 1600px;">
+
+    @* --- Header --- *@
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-success mb-0"><i class="bi bi-line me-2"></i>จัดการ LINE OA Bot</h3>
+            <p class="text-muted small mb-0">ตั้งค่า Channel Access Token และระบบตอบกลับอัตโนมัติ</p>
+        </div>
+        <button class="btn btn-success rounded-pill shadow-sm px-4" @onclick="NewBot">
+            <i class="bi bi-plus-lg me-2"></i>เพิ่มบัญชี LINE
+        </button>
+    </div>
+
+    @* --- Webhook Info --- *@
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-success bg-opacity-10">
+        <div class="card-body py-3 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-link-45deg fs-3 text-success me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-0 text-success">Webhook URL (สำหรับใส่ใน LINE Developers)</h6>
+                    <code class="user-select-all text-dark">https://somwhangshop.com/api/line/webhook</code>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-light text-success border" @onclick='() => CopyToClipboard("https://somwhangshop.com/api/line/webhook")'>Copy</button>
+        </div>
+    </div>
+
+    <div class="row g-4 h-100">
+        @* --- Left: List --- *@
+        <div class="col-lg-3 col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold text-secondary"><i class="bi bi-chat-dots me-2"></i>บัญชี LINE ของคุณ</h6>
+                </div>
+                <div class="list-group list-group-flush" style="max-height: 70vh; overflow-y: auto;">
+                    @foreach (var bot in bots)
+                    {
+                        <button class="list-group-item list-group-item-action py-3 border-bottom @(selectedBot?.Id == bot.Id ? "active-line" : "")"
+                                @onclick="() => SelectBot(bot)">
+                            <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                                <strong class="text-truncate">@bot.AdminNote</strong>
+                                @if (bot.IsActive)
+                                {
+                                    <span class="badge bg-success-subtle text-success rounded-pill">● Online</span>
+                                }
+                                else
+                                {
+
+                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill">○ Offline</span>
+                                }
+                            </div>
+                            <div class="small opacity-50"><i class="bi bi-key me-1"></i> Secret: ...@bot.ChannelSecret?.Substring(Math.Max(0, (bot.ChannelSecret?.Length ?? 0) - 4))</div>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* --- Right: Workspace --- *@
+        <div class="col-lg-9 col-md-8">
+            @if (selectedBot != null)
+            {
+                <div class="card shadow-sm border-0 rounded-4 h-100 fade-in">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-success text-white rounded-circle p-2 me-3"><i class="bi bi-line fs-4"></i></div>
+                            <h5 class="mb-0 fw-bold">@selectedBot.AdminNote</h5>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="form-check form-switch me-2" title="เปิด/ปิด บอท">
+                                <input class="form-check-input" type="checkbox" checked="@selectedBot.IsActive" @onchange="ToggleBotStatus">
+                            </div>
+                            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" @onclick="EditBotToken"><i class="bi bi-key me-1"></i> Config</button>
+                            <button class="btn btn-outline-danger btn-sm rounded-pill px-3" @onclick="DeleteBot"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="card-body bg-light bg-opacity-25 p-4">
+                        <div class="d-flex justify-content-between align-items-end mb-3">
+                            <h6 class="fw-bold text-dark mb-0">รายการคำตอบอัตโนมัติ (Keywords)</h6>
+                            <button class="btn btn-success btn-sm rounded-pill shadow-sm px-3" @onclick="NewRule"><i class="bi bi-plus-circle me-1"></i> เพิ่มคำตอบ</button>
+                        </div>
+
+                        @if (selectedBot.AutoReplyItems != null && selectedBot.AutoReplyItems.Any())
+                        {
+                            <div class="table-responsive bg-white rounded-3 shadow-sm border">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light text-secondary small">
+                                        <tr><th class="ps-4">คีย์เวิร์ด</th><th>คำตอบ</th><th class="text-end pe-4">จัดการ</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var rule in selectedBot.AutoReplyItems)
+                                        {
+                                            <tr>
+                                                <td class="ps-4">
+                                                    @foreach (var k in rule.Keywords.Split(','))
+                                                    {
+                                                        <span class="badge bg-secondary bg-opacity-10 text-dark border me-1">@k.Trim()</span>
+                                                    }
+                                                </td>
+                                                <td class="text-truncate" style="max-width: 300px;">@rule.ReplyMessage</td>
+                                                <td class="text-end pe-4">
+                                                    <button class="btn btn-sm btn-link text-primary p-0 me-2" @onclick="() => EditRule(rule)"><i class="bi bi-pencil-square"></i></button>
+                                                    <button class="btn btn-sm btn-link text-danger p-0" @onclick="() => DeleteRule(rule)"><i class="bi bi-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5 border rounded-3 bg-white border-dashed text-muted">
+                                <i class="bi bi-chat-text display-6 opacity-25"></i>
+                                <p class="mt-2">ยังไม่มีคำตอบสำหรับบัญชีนี้</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="h-100 d-flex align-items-center justify-content-center border rounded-4 bg-light text-secondary">
+                    <div class="text-center"><h5>เลือกบัญชี LINE ทางซ้ายมือ</h5></div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@* --- Modal: Bot Config --- *@
+@if (isEditingBot)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">ตั้งค่า LINE OA</h5>
+                    <button type="button" class="btn-close" @onclick="() => isEditingBot = false"></button>
+                </div>
+                <EditForm Model="editingBot" OnValidSubmit="SaveBot">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">ชื่อเรียก (Admin Note)</label>
+                            <InputText @bind-Value="editingBot.AdminNote" class="form-control" placeholder="เช่น LINE หลัก" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Channel Access Token (Long-lived)</label>
+                            <InputTextArea @bind-Value="editingBot.ChannelAccessToken" class="form-control font-monospace small bg-light" rows="5" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Channel Secret</label>
+                            <InputText @bind-Value="editingBot.ChannelSecret" class="form-control font-monospace" />
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" @onclick="() => isEditingBot = false">ยกเลิก</button>
+                        <button type="submit" class="btn btn-success px-4">บันทึก</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@* --- Modal: Rule --- *@
+@if (isEditingRule)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">จัดการคำตอบ</h5>
+                    <button type="button" class="btn-close" @onclick="() => isEditingRule = false"></button>
+                </div>
+                <EditForm Model="editingRule" OnValidSubmit="SaveRule">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">คีย์เวิร์ด (คั่นด้วย ,)</label>
+                            <InputText @bind-Value="editingRule.Keywords" class="form-control" placeholder="เช่น ราคา, โปรโมชั่น" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ข้อความตอบกลับ</label>
+                            <InputTextArea @bind-Value="editingRule.ReplyMessage" class="form-control" rows="4" />
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light" @onclick="() => isEditingRule = false">ยกเลิก</button>
+                        <button type="submit" class="btn btn-success px-4">บันทึก</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .active-line {
+        background-color: #f0fff4 !important;
+        border-left: 4px solid #198754 !important;
+        color: #198754;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(5px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    // ✅ ใช้ชื่อเล่น LineBotModel ที่ตั้งไว้ข้างบนแทน
+    private List<LineBotModel> bots = new();
+    private LineBotModel? selectedBot;
+    private LineBotModel editingBot = new();
+
+    private LineAutoReplyItem editingRule = new();
+    private bool isEditingBot = false;
+    private bool isEditingRule = false;
+
+    protected override void OnInitialized() { LoadData(); }
+
+    void LoadData()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            bots = context.LineBotConfigs.Include(b => b.AutoReplyItems).OrderByDescending(b => b.LastUpdated).ToList();
+            if (selectedBot != null) selectedBot = bots.FirstOrDefault(b => b.Id == selectedBot.Id);
+        }
+        catch { }
+    }
+
+    void SelectBot(LineBotModel bot) => selectedBot = bot;
+
+    void NewBot() { editingBot = new LineBotModel { IsActive = true }; isEditingBot = true; }
+    void EditBotToken() { editingBot = new LineBotModel { Id = selectedBot.Id, AdminNote = selectedBot.AdminNote, ChannelAccessToken = selectedBot.ChannelAccessToken, ChannelSecret = selectedBot.ChannelSecret, IsActive = selectedBot.IsActive }; isEditingBot = true; }
+
+    async Task SaveBot()
+    {
+        using var context = DbFactory.CreateDbContext();
+        if (editingBot.Id == 0) { editingBot.LastUpdated = DateTime.Now; context.LineBotConfigs.Add(editingBot); }
+        else
+        {
+            var existing = context.LineBotConfigs.Find(editingBot.Id);
+            if (existing != null) { existing.AdminNote = editingBot.AdminNote; existing.ChannelAccessToken = editingBot.ChannelAccessToken; existing.ChannelSecret = editingBot.ChannelSecret; existing.LastUpdated = DateTime.Now; }
+        }
+        await context.SaveChangesAsync();
+        isEditingBot = false;
+        LoadData();
+    }
+
+    async Task ToggleBotStatus(ChangeEventArgs e)
+    {
+        if (selectedBot == null) return;
+        using var context = DbFactory.CreateDbContext();
+        var bot = context.LineBotConfigs.Find(selectedBot.Id);
+        if (bot != null) { bot.IsActive = (bool)e.Value; await context.SaveChangesAsync(); LoadData(); }
+    }
+
+    async Task DeleteBot()
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "ยืนยันลบ?")) return;
+        using var context = DbFactory.CreateDbContext();
+        var b = context.LineBotConfigs.Find(selectedBot.Id);
+        if (b != null) { context.LineBotConfigs.Remove(b); await context.SaveChangesAsync(); selectedBot = null; LoadData(); }
+    }
+
+    void NewRule() { editingRule = new LineAutoReplyItem { LineBotConfigId = selectedBot.Id }; isEditingRule = true; }
+    void EditRule(LineAutoReplyItem r) { editingRule = new LineAutoReplyItem { Id = r.Id, LineBotConfigId = r.LineBotConfigId, Keywords = r.Keywords, ReplyMessage = r.ReplyMessage, IsActive = r.IsActive }; isEditingRule = true; }
+
+    async Task SaveRule()
+    {
+        using var context = DbFactory.CreateDbContext();
+        if (editingRule.Id == 0) context.LineAutoReplyItems.Add(editingRule);
+        else { var ex = context.LineAutoReplyItems.Find(editingRule.Id); if (ex != null) { ex.Keywords = editingRule.Keywords; ex.ReplyMessage = editingRule.ReplyMessage; } }
+        await context.SaveChangesAsync();
+        isEditingRule = false;
+        LoadData();
+    }
+
+    async Task DeleteRule(LineAutoReplyItem r)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "ลบคำตอบนี้?")) return;
+        using var context = DbFactory.CreateDbContext();
+        var item = context.LineAutoReplyItems.Find(r.Id);
+        if (item != null) { context.LineAutoReplyItems.Remove(item); await context.SaveChangesAsync(); LoadData(); }
+    }
+
+    async Task CopyToClipboard(string text) => await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+}

@@ -1,0 +1,642 @@
+﻿@page "/admin/orders"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using Microsoft.EntityFrameworkCore
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using SomwhangShop.Services
+@using System.Globalization
+
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@inject OrderService OrderService
+@inject EmailSender EmailSender
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Admin - จัดการคำสั่งซื้อ & เลขพัสดุ</PageTitle>
+
+<div class="container py-4 fade-in">
+
+    @* --- 📊 Dashboard สรุปยอด --- *@
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card bg-primary text-white shadow-sm border-0 h-100">
+                <div class="card-body d-flex align-items-center justify-content-between px-4">
+                    <div>
+                        <h6 class="text-white-50 text-uppercase mb-1">ยอดขายรวม (ที่แสดงอยู่)</h6>
+                        @* ใช้ยอดรวมจาก Database โดยตรงเพื่อให้แม่นยำแม้ไม่ได้โหลดข้อมูลทั้งหมดมา *@
+                        <h2 class="fw-bold mb-0">฿@totalSalesAmount.ToString("N0")</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="bi bi-cash-coin fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-success text-white shadow-sm border-0 h-100">
+                <div class="card-body d-flex align-items-center justify-content-between px-4">
+                    <div>
+                        <h6 class="text-white-50 text-uppercase mb-1">ปิดจ็อบแล้ว (รับของแล้ว)</h6>
+                        <h2 class="fw-bold mb-0">
+                            @completedOrdersCount
+                            <span class="fs-6 fw-normal text-white-50">/ @totalOrdersCount (ไม่รวม Test)</span>
+                        </h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="bi bi-check-circle-fill fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* --- ตัวกรองค้นหา --- *@
+    <div class="card shadow-sm border-0 mb-4 bg-white">
+        <div class="card-body p-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-search text-primary"></i> ค้นหารายการ</h5>
+                    <p class="text-muted small mb-0">กรองตามวันที่หรือชื่อลูกค้า</p>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted">ตั้งแต่วันที่</label>
+                    <input type="date" class="form-control" @bind="startDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted">ถึงวันที่</label>
+                    <input type="date" class="form-control" @bind="endDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted">ค้นหา (ชื่อ/Ref)</label>
+                    <input type="text" class="form-control" placeholder="..." @bind="searchText" />
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" @onclick="SearchOrders">
+                        <i class="bi bi-search"></i> ค้นหา
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ResetFilter" title="ล้างตัวกรอง">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* --- ตารางรายการ --- *@
+    @if (isLoading)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">กำลังโหลดข้อมูล...</p></div>
+    }
+    else if (orders.Count == 0)
+    {
+        <div class="text-center py-5 bg-light rounded-3 border border-dashed">
+            <h4 class="text-muted">ไม่พบรายการในช่วงเวลานี้</h4>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase">
+                        <tr>
+                            <th class="py-3 ps-4">วันที่ / รหัส</th>
+                            <th>ร้านค้า</th> 
+                            <th>ลูกค้า</th>
+                            <th>ยอดเงิน / สลิป</th>
+                            <th>ขนส่ง / ค่าส่ง</th>
+                            <th>สถานะ</th>
+                            <th class="text-end pe-4" style="min-width: 170px;">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        @foreach (var order in orders)
+                        {
+                            <tr style="@(order.Status == "TEST" ? "background-color: #fffbf0;" : "background-color: #fff;")">
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">@order.OrderDate.ToString("dd/MM/yy HH:mm", new CultureInfo("th-TH"))</div>
+                                    <span class="badge bg-light text-secondary border fw-normal font-monospace">@order.OrderId</span>
+                                    @if (!string.IsNullOrEmpty(order.AffiliateId))
+                                    {
+                                        <div class="mt-1"><span class="badge bg-info text-dark shadow-sm" style="font-size: 0.65rem;"><i class="bi bi-share-fill me-1"></i> Ref: @order.AffiliateId</span></div>
+                                    }
+                                </td>
+                                
+                                <td>
+                                    @{
+                                        var shop = order.OrderItems.FirstOrDefault()?.Product?.Shop;
+                                        var shopName = shop?.Name ?? "ไม่ระบุ";
+                                        var shopImg = shop?.ImageUrl;
+                                    }
+                                    <div class="d-flex align-items-center">
+                                        @if (!string.IsNullOrEmpty(shopImg))
+                                        {
+                                            <img src="@shopImg" class="rounded-circle me-2 border" width="32" height="32" style="object-fit: cover;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-light rounded-circle me-2 d-flex align-items-center justify-content-center border" style="width: 32px; height: 32px;">
+                                                <i class="bi bi-shop text-muted small"></i>
+                                            </div>
+                                        }
+                                        <div class="small fw-bold text-dark text-truncate" style="max-width: 120px;">@shopName</div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="fw-bold text-dark">@order.CustomerName</div>
+                                    <div class="small text-muted"><i class="bi bi-telephone"></i> @order.PhoneNumber</div>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-success">฿@order.TotalAmount.ToString("N0")</div>
+                                    @if (!string.IsNullOrEmpty(order.SlipImageUrl))
+                                    {
+                                        <button class="btn btn-sm btn-outline-info mt-1 rounded-pill px-3 py-0" style="font-size: 0.75rem;"
+                                                @onclick="() => OpenSlipModal(order.SlipImageUrl)">
+                                            <i class="bi bi-eye"></i> ดูสลิป
+                                        </button>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="mb-1">
+                                        <span class="badge bg-white text-dark border">
+                                            <i class="bi bi-truck text-primary"></i> @(string.IsNullOrEmpty(order.CourierName) ? "ไม่ระบุ" : order.CourierName)
+                                        </span>
+                                    </div>
+                                    <div class="text-secondary small fw-bold">
+                                        ค่าส่ง: <span class="text-dark">฿@order.ShippingCost.ToString("N0")</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(order.TrackingNumber))
+                                    {
+                                        <div class="mt-1">
+                                            <a href="@GetTrackingUrl(order.CourierName, order.TrackingNumber)" target="_blank"
+                                               class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill fw-bold" style="font-size: 0.75rem;">
+                                                <i class="bi bi-box-arrow-up-right me-1"></i> @order.TrackingNumber
+                                            </a>
+                                        </div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (order.Status == "จัดส่งเรียบร้อย")
+                                    {
+                                        <span class="badge bg-success rounded-pill"><i class="bi bi-check-circle-fill me-1"></i> ลูกค้าได้รับของแล้ว</span>
+                                    }
+                                    else if (order.Status == "จัดส่งแล้ว")
+                                    {
+                                        <span class="badge bg-primary rounded-pill"><i class="bi bi-truck me-1"></i> ส่งของแล้ว</span>
+                                    }
+                                    else if (order.Status == "ชำระเงินแล้ว")
+                                    {
+                                        <span class="badge bg-info text-dark rounded-pill">💰 จ่ายแล้ว (รอส่ง)</span>
+                                    }
+                                    else if (order.Status == "รอตรวจสอบยอดเงิน")
+                                    {
+                                        <span class="badge bg-warning text-dark rounded-pill">⏳ รอตรวจสอบ</span>
+                                    }
+                                    else if (order.Status == "ยกเลิก")
+                                    {
+                                        <span class="badge bg-secondary rounded-pill">ยกเลิก</span>
+                                    }
+                                    else if (order.Status == "TEST")
+                                    {
+                                        <span class="badge bg-warning text-dark border border-warning rounded-pill">🧪 TEST SYSTEM</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-dark border rounded-pill">@order.Status</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    @if (order.Status == "ชำระเงินแล้ว")
+                                    {
+                                        <button class="btn btn-sm btn-warning me-1 text-dark fw-bold" title="แจ้งเลขพัสดุ" @onclick="() => OpenShipModal(order)">
+                                            <i class="bi bi-box-seam-fill"></i> ส่งของ
+                                        </button>
+                                    }
+                                    @if (order.Status == "จัดส่งแล้ว")
+                                    {
+                                        <button class="btn btn-sm btn-success me-1 fw-bold" title="ลูกค้าได้รับของแล้ว" @onclick="() => CompleteOrder(order)">
+                                            <i class="bi bi-check-lg"></i> ปิดจ็อบ
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-primary me-1" title="แก้ไข" @onclick="() => OpenEditModal(order)">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" title="ลบ" @onclick="() => DeleteOrder(order)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            
+                            @if (order.OrderItems != null && order.OrderItems.Any())
+                            {
+                                <tr style="@(order.Status == "TEST" ? "background-color: #fffbf0;" : "")">
+                                    <td colspan="7" class="p-0 border-0"> 
+                                        <div class="bg-light mx-3 mb-3 p-3 rounded border-start border-4 border-primary">
+                                            <div class="row">
+                                                <div class="col-md-7">
+                                                    <small class="fw-bold text-muted">📍 ที่อยู่จัดส่ง:</small>
+                                                    <span class="small ms-1">@order.ShippingAddress</span>
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <small class="fw-bold text-muted">🛍️ สินค้า:</small>
+                                                    <ul class="list-unstyled mb-0 small mt-1">
+                                                        @foreach (var item in order.OrderItems)
+                                                        {
+                                                            <li class="d-flex justify-content-between border-bottom border-white pb-1 mb-1">
+                                                                <span>@item.ProductName x @item.Quantity</span>
+                                                                <span class="fw-bold">@item.TotalPrice.ToString("N0")</span>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* --- Pagination Controls --- *@
+            <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                <span class="text-muted small">แสดง @((currentPage - 1) * pageSize + 1) ถึง @Math.Min(currentPage * pageSize, totalItems) จาก @totalItems รายการ</span>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                            <button class="page-link rounded-start" @onclick="() => ChangePage(currentPage - 1)">
+                                <i class="bi bi-chevron-left"></i> ก่อนหน้า
+                            </button>
+                        </li>
+                        
+                        @* Logic แสดงเลขหน้าแบบย่อ *@
+                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                        {
+                            var pageNum = i;
+                            <li class="page-item @(currentPage == i ? "active" : "")">
+                                <button class="page-link" @onclick="() => ChangePage(pageNum)">@i</button>
+                            </li>
+                        }
+
+                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                            <button class="page-link rounded-end" @onclick="() => ChangePage(currentPage + 1)">
+                                ถัดไป <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    }
+</div>
+
+@* --- Modal ดูสลิป --- *@
+@if (showSlipModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.8); z-index: 1060;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-transparent border-0 text-center">
+                <div class="position-relative">
+                    <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 bg-dark rounded-circle p-2" @onclick="() => showSlipModal = false"></button>
+                    <img src="@currentSlipUrl" class="img-fluid rounded shadow-lg" style="max-height: 85vh;" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* --- Modal แก้ไขออเดอร์ --- *@
+@if (showEditModal && editingOrder != null)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5); z-index: 1050;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i>จัดการออเดอร์</h5>
+                    <button type="button" class="btn-close" @onclick="() => showEditModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card bg-light border-0 p-3 mb-3">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">สถานะ</label>
+                            <select class="form-select" @bind="editingOrder.Status">
+                                <option value="รอตรวจสอบยอดเงิน">รอตรวจสอบยอดเงิน</option>
+                                <option value="ชำระเงินแล้ว">ชำระเงินแล้ว (เตรียมส่ง)</option>
+                                <option value="จัดส่งแล้ว">จัดส่งแล้ว (อยู่กับขนส่ง)</option>
+                                <option value="จัดส่งเรียบร้อย">จัดส่งเรียบร้อย (ลูกค้าได้รับของแล้ว)</option>
+                                <option value="TEST">TEST (ทดสอบระบบ)</option>
+                                <option value="ยกเลิก">ยกเลิก</option>
+                            </select>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label small fw-bold text-muted">เลขพัสดุ (Tracking Number)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-barcode"></i></span>
+                                <input type="text" class="form-control" @bind="editingOrder.TrackingNumber" placeholder="เช่น TH0123..." />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">บริษัทขนส่ง</label>
+                            <input type="text" class="form-control form-control-sm" @bind="editingOrder.CourierName" placeholder="เช่น Flash, SPX, DHL" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">ค่าจัดส่ง (บาท)</label>
+                            <input type="number" class="form-control form-control-sm" @bind="editingOrder.ShippingCost" />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-text text-danger small">* หากเปลี่ยนบริษัทขนส่ง กรุณาระบุชื่อใหม่ให้ถูกต้อง</div>
+                        </div>
+                    </div>
+                    <hr />
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">ชื่อลูกค้า</label>
+                        <input type="text" class="form-control" @bind="editingOrder.CustomerName" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label small fw-bold text-muted">ที่อยู่จัดส่ง</label>
+                        <textarea class="form-control" rows="3" @bind="editingOrder.ShippingAddress"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showEditModal = false">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveOrderChanges">
+                        <i class="bi bi-save me-1"></i> บันทึกข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<Order> orders = new List<Order>();
+    bool isLoading = false;
+    DateTime? startDate = null;
+    DateTime? endDate = null;
+    string searchText = "";
+    bool showSlipModal = false;
+    string currentSlipUrl = "";
+    bool showEditModal = false;
+    Order? editingOrder = null;
+
+    // --- Pagination Variables ---
+    int currentPage = 1;
+    int pageSize = 20; // จำนวนรายการต่อหน้า (ปรับได้)
+    int totalItems = 0;
+    int totalPages = 1;
+    
+    // --- Dashboard Variables (ดึงแยกเพื่อให้แม่นยำ) ---
+    decimal totalSalesAmount = 0;
+    int completedOrdersCount = 0;
+    int totalOrdersCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+    
+    // รีเซ็ตหน้าเมื่อกดค้นหา
+    async Task SearchOrders()
+    {
+        currentPage = 1;
+        await LoadOrders();
+    }
+
+    async Task ChangePage(int newPage)
+    {
+        if (newPage < 1 || newPage > totalPages) return;
+        currentPage = newPage;
+        await LoadOrders();
+    }
+
+    async Task LoadOrders()
+    {
+        isLoading = true;
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            
+            // 1. สร้าง Query สำหรับกรองข้อมูล
+            var query = context.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                    .ThenInclude(p => p.Shop)
+                .AsQueryable();
+
+            if (startDate.HasValue) query = query.Where(o => o.OrderDate >= startDate.Value.Date);
+            if (endDate.HasValue)
+            {
+                var end = endDate.Value.Date.AddDays(1).AddTicks(-1);
+                query = query.Where(o => o.OrderDate <= end);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                query = query.Where(o => o.CustomerName.Contains(searchText) ||
+                                     o.OrderId.Contains(searchText) ||
+                                     o.AffiliateId.Contains(searchText));
+            }
+            
+            // 2. คำนวณยอดสรุป (Dashboard) จาก Query หลัก (ไม่รวม Pagination)
+            // หมายเหตุ: แยกออกมาคำนวณเพื่อให้ตัวเลขบนการ์ดยังถูกต้องแม้จะอยู่หน้า 2,3,4
+            // แต่เพื่อให้เร็วขึ้น เราอาจแยก Query นี้ออกไปคำนวณทีเดียวตอนเข้าหน้าแรกก็ได้
+            // ในที่นี้ทำแบบ Real-time ตาม Filter
+            var statsQuery = query.Where(o => o.Status != "TEST");
+            totalSalesAmount = await statsQuery.SumAsync(o => o.TotalAmount);
+            completedOrdersCount = await statsQuery.CountAsync(o => o.Status == "จัดส่งเรียบร้อย");
+            totalOrdersCount = await statsQuery.CountAsync();
+
+            // 3. Pagination Logic (หัวใจสำคัญแก้ Time Bomb) 💣 -> 🚀
+            totalItems = await query.CountAsync();
+            totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+            if (totalPages < 1) totalPages = 1;
+
+            // โหลดเฉพาะข้อมูลที่จะแสดงในหน้านั้นๆ (Skip & Take)
+            orders = await query
+                .OrderByDescending(o => o.OrderDate)
+                .Skip((currentPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    void ResetFilter()
+    {
+        startDate = null;
+        endDate = null;
+        searchText = "";
+        currentPage = 1; // กลับไปหน้า 1
+        LoadOrders();
+    }
+
+    // --- ส่วนฟังก์ชัน Modal และ Action ต่างๆ คงเดิม 100% ---
+
+    void OpenSlipModal(string url)
+    {
+        currentSlipUrl = url;
+        showSlipModal = true;
+    }
+
+    void OpenEditModal(Order order)
+    {
+        editingOrder = new Order
+        {
+            OrderId = order.OrderId,
+            CustomerName = order.CustomerName,
+            ShippingAddress = order.ShippingAddress,
+            TrackingNumber = order.TrackingNumber,
+            Status = order.Status,
+            CourierName = order.CourierName,
+            ShippingCost = order.ShippingCost
+        };
+        showEditModal = true;
+    }
+
+    void OpenShipModal(Order order)
+    {
+        editingOrder = new Order
+        {
+            OrderId = order.OrderId,
+            CustomerName = order.CustomerName,
+            ShippingAddress = order.ShippingAddress,
+            TrackingNumber = order.TrackingNumber,
+            Status = "จัดส่งแล้ว",
+            CourierName = order.CourierName,
+            ShippingCost = order.ShippingCost
+        };
+        showEditModal = true;
+    }
+
+    async Task CompleteOrder(Order order)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"ยืนยันว่าลูกค้าได้รับของแล้ว (ออเดอร์ {order.OrderId})?")) return;
+        editingOrder = new Order
+        {
+            OrderId = order.OrderId,
+            CustomerName = order.CustomerName,
+            ShippingAddress = order.ShippingAddress,
+            TrackingNumber = order.TrackingNumber,
+            Status = "จัดส่งเรียบร้อย",
+            CourierName = order.CourierName,
+            ShippingCost = order.ShippingCost
+        };
+        await SaveOrderChanges();
+    }
+
+    string GetTrackingUrl(string courier, string trackingNumber)
+    {
+        if (string.IsNullOrEmpty(trackingNumber)) return "#";
+        courier = courier?.ToLower() ?? "";
+        trackingNumber = trackingNumber.Trim();
+
+        if (courier.Contains("flash")) return $"https://www.flashexpress.co.th/tracking/?se={trackingNumber}";
+        if (courier.Contains("spx") || courier.Contains("shopee")) return $"https://spx.co.th/tracking?tracking_number={trackingNumber}";
+        if (courier.Contains("kerry")) return $"https://th.kerryexpress.com/th/track/?track={trackingNumber}";
+        if (courier.Contains("j&t")) return $"https://www.jtexpress.co.th/tracking?billcode={trackingNumber}";
+        if (courier.Contains("thai") || courier.Contains("post") || courier.Contains("ems")) return $"https://track.thailandpost.co.th/?track={trackingNumber}";
+        if (courier.Contains("dhl")) return $"https://www.dhl.com/th-th/home/tracking.html?tracking-id={trackingNumber}";
+        return $"https://www.google.com/search?q={trackingNumber}";
+    }
+
+    async Task SaveOrderChanges()
+    {
+        if (editingOrder == null) return;
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            var dbOrder = await context.Orders.FindAsync(editingOrder.OrderId);
+
+            if (dbOrder != null)
+            {
+                bool isTrackingChanged = dbOrder.TrackingNumber != editingOrder.TrackingNumber
+                                         && !string.IsNullOrEmpty(editingOrder.TrackingNumber);
+                dbOrder.Status = editingOrder.Status;
+                dbOrder.TrackingNumber = editingOrder.TrackingNumber;
+                dbOrder.CustomerName = editingOrder.CustomerName;
+                dbOrder.ShippingAddress = editingOrder.ShippingAddress;
+                dbOrder.CourierName = editingOrder.CourierName;
+                dbOrder.ShippingCost = editingOrder.ShippingCost;
+
+                await context.SaveChangesAsync();
+                var listOrder = orders.FirstOrDefault(o => o.OrderId == editingOrder.OrderId);
+                if (listOrder != null)
+                {
+                    listOrder.Status = editingOrder.Status;
+                    listOrder.TrackingNumber = editingOrder.TrackingNumber;
+                    listOrder.CustomerName = editingOrder.CustomerName;
+                    listOrder.ShippingAddress = editingOrder.ShippingAddress;
+                    listOrder.CourierName = editingOrder.CourierName;
+                    listOrder.ShippingCost = editingOrder.ShippingCost;
+                }
+
+                if (isTrackingChanged && !string.IsNullOrEmpty(dbOrder.Email))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            string trackUrl = GetTrackingUrl(dbOrder.CourierName, dbOrder.TrackingNumber);
+                            string subject = $"📦 จัดส่งแล้ว! หมายเลขพัสดุสำหรับคำสั่งซื้อ {dbOrder.OrderId}";
+                            string body = $@"
+                                <div style='font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px; max-width: 600px; margin: auto;'>
+                                    <h2 style='color: #28a745;'>สินค้าของท่านได้รับการจัดส่งแล้ว</h2>
+                                    <p>เรียนคุณ {dbOrder.CustomerName},</p>
+                                    <p>ทางร้านได้ทำการจัดส่งสินค้าเรียบร้อยแล้ว รายละเอียดดังนี้ครับ:</p>
+                                    <hr />
+                                    <p><strong>ขนส่ง:</strong> {dbOrder.CourierName}</p>
+                                    <p><strong>หมายเลขพัสดุ:</strong> <span style='font-size: 1.2em; color: #0d6efd; font-weight: bold;'>{dbOrder.TrackingNumber}</span></p>
+                                    <div style='text-align: center; margin-top: 20px;'>
+                                        <a href='{trackUrl}' style='background-color: #0d6efd; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;'>ตรวจสอบสถานะพัสดุ</a>
+                                    </div>
+                                    <hr />
+                                    <p style='font-size: 0.9em; color: #666;'>หากปุ่มกดไม่ได้ สามารถนำเลขพัสดุไปตรวจสอบได้ที่เว็บไซต์ของขนส่งโดยตรง</p>
+                                    <p>ขอบคุณที่อุดหนุนครับ 🙏</p>
+                                </div>";
+                            await EmailSender.SendEmailAsync(dbOrder.Email, subject, body);
+                        }
+                        catch (Exception ex) { Console.WriteLine($"Email Error: {ex.Message}"); }
+                    });
+                }
+
+                showEditModal = false;
+                if (editingOrder.Status != "จัดส่งเรียบร้อย")
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", "บันทึกข้อมูลเรียบร้อยแล้ว!");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"เกิดข้อผิดพลาด: {ex.Message}");
+        }
+    }
+
+    async Task DeleteOrder(Order order)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"ยืนยันที่จะลบออเดอร์ {order.OrderId}?")) return;
+        using var context = DbFactory.CreateDbContext();
+        var dbOrder = await context.Orders.FindAsync(order.OrderId);
+
+        var items = context.OrderItems.Where(i => i.OrderId == order.OrderId);
+        context.OrderItems.RemoveRange(items);
+        if (dbOrder != null) context.Orders.Remove(dbOrder);
+
+        await context.SaveChangesAsync();
+        orders.Remove(order);
+        
+        // โหลดข้อมูลใหม่เพื่อให้ Pagination อัปเดต
+        await LoadOrders();
+    }
+}

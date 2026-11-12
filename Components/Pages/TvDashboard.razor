@@ -1,0 +1,336 @@
+﻿@page "/tv"
+@using Microsoft.EntityFrameworkCore
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using System.Text.RegularExpressions
+@using System.Globalization
+@using System.Net
+
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+@implements IDisposable
+
+@layout SomwhangShop.Components.Layout.EmptyLayout
+
+<PageTitle>TV Dashboard - Live Monitor</PageTitle>
+
+@* --- 🔔 Audio Element --- *@
+<audio id="notificationSound" src="/sound/alert.mp3" preload="auto"></audio>
+
+@* --- ✨ Label Overlay --- *@
+<div id="alertOverlay" class="alert-overlay" style="display: none;">
+    <div class="alert-content">
+        <div class="alert-icon-box">
+            <i class="bi bi-bell-fill alert-icon"></i>
+        </div>
+        <h1 class="alert-title">NEW ORDER!</h1>
+        <p class="alert-subtitle">มีรายการสั่งซื้อใหม่เข้ามา</p>
+    </div>
+</div>
+
+<div class="tv-container fade-in">
+    @* --- Header --- *@
+    <div class="d-flex justify-content-between align-items-center mb-4 px-2">
+        <div class="d-flex align-items-center gap-3">
+            <div class="logo-box bg-white rounded-3 p-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 70px; height: 70px;">
+                <img src="/images/logo.jpg"
+                     onerror="this.onerror=null; this.src='/images/logo.png'; this.src='https://placehold.co/100x100/png?text=SHOP';"
+                     alt="Logo" class="img-fluid" style="max-height: 100%; max-width: 100%; object-fit: contain;" />
+            </div>
+            <div>
+                <h1 class="fw-bold mb-0 text-white text-uppercase" style="letter-spacing: 2px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">Somwhang Shop</h1>
+                <p class="text-white-50 mb-0 d-flex align-items-center gap-2">
+                    <span class="badge bg-danger animate-pulse border border-light">LIVE</span>
+                    <span class="font-monospace">@DateTime.Now.ToString("dd MMMM yyyy", new CultureInfo("th-TH"))</span>
+                </p>
+            </div>
+        </div>
+        <div class="text-end">
+            <h1 class="display-3 fw-bold text-warning mb-0 font-monospace" style="text-shadow: 0 0 20px rgba(255,193,7,0.5);">
+                @DateTime.Now.ToString("HH:mm")
+            </h1>
+        </div>
+    </div>
+
+    @* --- Main Content Grid --- *@
+    <div class="row g-4 h-100">
+        @* Left: Stats & Orders *@
+        <div class="col-lg-4 d-flex flex-column gap-3">
+
+            @* 💰 Stats Cards *@
+            <div class="glass-card p-3">
+                <div class="row text-center align-items-center h-100">
+                    <div class="col-6 border-end border-white border-opacity-10">
+                        <h6 class="text-white-50 text-uppercase small mb-2">วันนี้ (Today)</h6>
+                        <h2 class="fw-bold text-warning mb-0">฿@TotalSalesToday.ToString("N0")</h2>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-white-50 text-uppercase small mb-2">รวมทั้งหมด (Total)</h6>
+                        <h2 class="fw-bold text-success mb-0">฿@TotalRevenue.ToString("N0")</h2>
+                    </div>
+                </div>
+            </div>
+
+            @* 🛒 Recent Orders List *@
+            <div class="glass-card flex-grow-1 d-flex flex-column overflow-hidden">
+                <div class="p-3 border-bottom border-white border-opacity-10 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-white fw-bold"><i class="bi bi-basket2 me-2"></i>ออเดอร์ล่าสุด</h5>
+                    <span class="badge bg-primary bg-opacity-50 rounded-pill">@RecentOrders.Count</span>
+                </div>
+                <div class="p-2 overflow-auto custom-scrollbar" style="flex: 1;">
+                    @if (RecentOrders.Any())
+                    {
+                        @foreach (var order in RecentOrders)
+                        {
+                            var shop = order.OrderItems.FirstOrDefault()?.Product?.Shop;
+                            var shopName = shop?.Name ?? "ไม่ระบุ";
+                            var shopImg = shop?.ImageUrl ?? "/images/no-image.png";
+
+                            <div class="order-item p-3 mb-2 rounded-3 d-flex justify-content-between align-items-center"
+                                 style="@(order.Status == "TEST" ? "background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107;" : "")">
+                                
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="position-relative">
+                                        <img src="@shopImg" class="rounded-circle border border-secondary" 
+                                             style="width: 40px; height: 40px; object-fit: cover;" 
+                                             onerror="this.src='/images/no-image.png';" />
+                                        <span class="status-indicator @GetStatusColor(order.Status) position-absolute bottom-0 end-0 border border-dark"></span>
+                                    </div>
+
+                                    <div>
+                                        <div class="fw-bold text-white fs-5 lh-1">
+                                            @order.CustomerName
+                                            @if (order.Status == "TEST")
+                                            {
+                                                <span class="badge bg-warning text-dark ms-2 blink" style="font-size: 0.6rem;">TEST MODE</span>
+                                            }
+                                        </div>
+                                        <div class="d-flex align-items-center mt-1">
+                                            <span class="badge bg-light text-dark bg-opacity-25 border border-white border-opacity-10 me-2" style="font-size: 0.7rem;">@shopName</span>
+                                            <span class="text-white-50 small font-monospace">@order.OrderDate.ToString("HH:mm") น.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="text-end">
+                                    <div class="fw-bold text-warning fs-4">฿@order.TotalAmount.ToString("N0")</div>
+                                    <span class="badge bg-dark text-white-50 bg-opacity-50 rounded-pill small border border-secondary">@order.Status</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="h-100 d-flex flex-column align-items-center justify-content-center text-white-50 opacity-50">
+                            <i class="bi bi-cart-x display-1 mb-3"></i>
+                            <p>ยังไม่มีออเดอร์วันนี้</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Right: YouTube Player *@
+        <div class="col-lg-8">
+            <div class="glass-card h-100 p-0 overflow-hidden position-relative youtube-wrapper">
+                @if (!string.IsNullOrEmpty(YoutubeEmbedUrl))
+                {
+                    <iframe id="youtube-player"
+                            key="@IframeKey"
+                            src="@YoutubeEmbedUrl"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            class="w-100 h-100 position-absolute top-0 start-0">
+                    </iframe>
+                }
+                else
+                {
+                    <div class="position-absolute top-50 start-50 translate-middle text-center w-75">
+                        <i class="bi bi-youtube display-1 text-danger mb-4 d-block animate-bounce-slow"></i>
+                        <h2 class="text-white mb-4">กำลังโหลดรายการเพลง...</h2>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(YoutubeEmbedUrl))
+                {
+                    // ✅ ขยับแถบค้นหาขึ้นมาอีกหน่อย (bottom-5) และเพิ่ม Padding ให้ห่างจากขอบล่าง
+                    <div class="position-absolute bottom-0 start-0 w-100 p-4 bg-gradient-to-t" style="z-index: 10;">
+                        <div class="input-group shadow-lg opacity-hover mb-3" style="max-width: 500px; margin: 0 auto; transition: 0.3s; transform: translateY(-20px);">
+                            <input type="text" class="form-control bg-dark bg-opacity-75 text-white border-0 py-2"
+                                   placeholder="เปลี่ยนเพลง (ชื่อเพลง หรือ ลิงก์)..."
+                                   @bind="YoutubeQuery" @onkeyup="HandleEnterKey">
+                            <button class="btn btn-primary px-3" @onclick="SearchYoutube">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button class="btn btn-danger px-3" @onclick="StopYoutube" title="ปิดเพลง">
+                                <i class="bi bi-stop-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Dark Theme & Glassmorphism */
+    body { background-color: #121212; color: #fff; overflow: hidden; }
+    
+    /* ✅ เพิ่ม padding-bottom เป็น 8rem เพื่อดันเนื้อหาขึ้นหนีขอบจอ */
+    .tv-container { height: 100vh; padding: 2rem 2rem 8rem 2rem; background: radial-gradient(circle at top right, #1e1e2f, #0d0d12); }
+    
+    .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); }
+
+    /* Order Item Style */
+    .order-item { background: rgba(255, 255, 255, 0.03); transition: transform 0.2s, background 0.2s; border-left: 4px solid transparent; }
+    .order-item:hover { background: rgba(255, 255, 255, 0.08); transform: translateX(5px); }
+
+    /* Status Colors */
+    .status-indicator { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+    .status-success { background-color: #28a745; color: #28a745; }
+    .status-pending { background-color: #ffc107; color: #ffc107; }
+    .status-shipping { background-color: #0d6efd; color: #0d6efd; }
+    .status-test { background-color: #ffc107; color: #ffc107; box-shadow: 0 0 8px #ffc107; }
+
+    /* Animations */
+    .animate-pulse { animation: pulse 2s infinite; }
+    .animate-bounce-slow { animation: bounce 3s infinite; }
+    .blink { animation: blinker 1s linear infinite; }
+    .opacity-hover { opacity: 0.1; } /* ปรับให้จางลงเมื่อไม่ใช้ จะได้ไม่รกตา */
+    .opacity-hover:hover { opacity: 1; }
+    
+    @@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    @@keyframes blinker { 50% { opacity: 0; } }
+    @@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+    /* Alert Overlay */
+    .alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; animation: zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(5px); }
+    .alert-content { text-align: center; color: white; transform: scale(1.2); }
+    .alert-icon-box { width: 120px; height: 120px; background: #28a745; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; box-shadow: 0 0 50px rgba(40, 167, 69, 0.6); animation: bounce 1s infinite; }
+    .alert-icon { font-size: 60px; color: white; }
+    .alert-title { font-size: 5rem; font-weight: 900; margin-bottom: 0; text-shadow: 0 5px 15px rgba(0,0,0,0.5); background: -webkit-linear-gradient(#fff, #ccc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .alert-subtitle { font-size: 2rem; opacity: 0.8; letter-spacing: 2px; }
+
+    @@keyframes zoomIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+</style>
+
+@code {
+    private decimal TotalRevenue = 0;
+    private decimal TotalSalesToday = 0;
+    private List<Order> RecentOrders = new();
+    private System.Threading.Timer? timer;
+    private int lastOrderCount = -1;
+    private string YoutubeQuery = "";
+    private string? YoutubeEmbedUrl;
+    private int IframeKey = 0;
+    private bool IsLyricsMode = true;
+
+    protected override void OnInitialized()
+    {
+        NavManager.LocationChanged += (s, e) => Dispose();
+        LoadData();
+        
+        // ✅ ตั้งค่า Default Playlist (Mix เขียนลงอาย)
+        var defaultVideoId = "yeyTamEF_lc";
+        string origin = NavManager.BaseUri.TrimEnd('/'); 
+        YoutubeEmbedUrl = $"https://www.youtube-nocookie.com/embed/{defaultVideoId}?list=RD{defaultVideoId}&autoplay=1&controls=1&enablejsapi=1&origin={origin}";
+
+        timer = new System.Threading.Timer(_ => InvokeAsync(LoadData), null, 0, 30000);
+    }
+
+    public void Dispose() { timer?.Dispose(); }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            var today = DateTime.Today;
+
+            TotalRevenue = context.Orders.Where(o => o.Status != "TEST").Sum(o => o.TotalAmount);
+            TotalSalesToday = context.Orders.Where(o => o.OrderDate >= today && o.Status != "TEST").Sum(o => o.TotalAmount);
+
+            var currentOrderCount = context.Orders.Where(o => o.OrderDate >= today).Count();
+            if (lastOrderCount != -1 && currentOrderCount > lastOrderCount)
+            {
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    var audio = document.getElementById('notificationSound');
+                    if(audio) { audio.play().catch(e => console.log('Audio play failed', e)); }
+                    var overlay = document.getElementById('alertOverlay');
+                    if(overlay) {
+                        overlay.style.display = 'flex';
+                        setTimeout(() => { overlay.style.display = 'none'; }, 5000);
+                    }
+                ");
+            }
+            lastOrderCount = currentOrderCount;
+
+            RecentOrders = context.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                    .ThenInclude(p => p.Shop)
+                .Where(o => o.OrderDate >= today)
+                .OrderByDescending(o => o.OrderDate)
+                .Take(8)
+                .ToList();
+
+            StateHasChanged();
+        }
+        catch (Exception ex) { Console.WriteLine($"TV Error: {ex.Message}"); }
+    }
+
+    private void SearchYoutube()
+    {
+        if (string.IsNullOrWhiteSpace(YoutubeQuery)) return;
+        IframeKey++;
+        var videoId = ExtractVideoId(YoutubeQuery);
+        string baseUrl = "https://www.youtube-nocookie.com/embed";
+        string origin = NavManager.BaseUri.TrimEnd('/'); 
+
+        if (!string.IsNullOrEmpty(videoId))
+        {
+            YoutubeEmbedUrl = $"{baseUrl}/{videoId}?autoplay=1&controls=1&enablejsapi=1&origin={origin}";
+        }
+        else
+        {
+            var searchTerms = IsLyricsMode ? $"{YoutubeQuery} Lyrics" : YoutubeQuery;
+            var encodedQuery = Uri.EscapeDataString(searchTerms);
+            YoutubeEmbedUrl = $"{baseUrl}?listType=search&list={encodedQuery}&autoplay=1&controls=1&enablejsapi=1&origin={origin}";
+        }
+    }
+
+    private void StopYoutube()
+    {
+        YoutubeEmbedUrl = null;
+        YoutubeQuery = "";
+    }
+
+    private void HandleEnterKey(KeyboardEventArgs e) { if (e.Key == "Enter") SearchYoutube(); }
+
+    private string? ExtractVideoId(string url)
+    {
+        var regex = new Regex(@"(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^""&?\/\s]{11})", RegexOptions.IgnoreCase);
+        var match = regex.Match(url);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "จัดส่งเรียบร้อย" => "status-success",
+            "จัดส่งแล้ว" => "status-shipping",
+            "ชำระเงินแล้ว" => "status-pending",
+            "TEST" => "status-test",
+            _ => ""
+        };
+    }
+}

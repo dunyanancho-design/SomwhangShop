@@ -1,0 +1,163 @@
+﻿@page "/admin/slip-config"
+@layout SomwhangShop.Components.Layout.AdminLayout
+@using SomwhangShop.Models
+@using SomwhangShop.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<SomwhangShopContext> DbFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="container py-4 fade-in" style="max-width: 850px;">
+    <div class="card shadow-sm border-0 rounded-4">
+        @* --- ส่วนหัว: เลือกจัดการตามร้านค้า --- *@
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+            <h5 class="mb-0 fw-bold text-primary">
+                <i class="bi bi-gear-wide-connected me-2"></i>ตั้งค่าระบบตรวจสลิปแยกรายร้าน
+            </h5>
+
+            <div class="d-flex align-items-center gap-2">
+                <span class="small text-muted fw-bold">เลือกบัญชีร้าน:</span>
+                <select class="form-select form-select-sm w-auto shadow-sm border-primary" @onchange="OnShopChanged">
+                    <option value="1">สมหวัง ลูกชิ้นเนื้อแท้ (ID: 1)</option>
+                    <option value="3">สมหวัง น้ำปลาร้า (ID: 3)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            @* แสดงสถานะปัจจุบัน *@
+            <div class="alert alert-primary border-0 bg-primary bg-opacity-10 d-flex align-items-center mb-4">
+                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                <div>
+                    <div class="fw-bold">กำลังจัดการการตั้งค่าสำหรับ:</div>
+                    <span class="badge bg-primary">@(selectedShopId == 1 ? "ร้านลูกชิ้นเนื้อแท้" : "ร้านน้ำปลาร้า")</span>
+                </div>
+            </div>
+
+            <EditForm Model="config" OnValidSubmit="SaveConfig">
+                <DataAnnotationsValidator />
+
+                <div class="row g-4">
+                    @* --- ข้อมูล API --- *@
+                    <div class="col-12">
+                        <label class="form-label fw-bold"><i class="bi bi-link-45deg me-1"></i>API URL (Thunder API)</label>
+                        <InputText @bind-Value="config.ApiUrl" class="form-control shadow-sm" placeholder="https://api.thunder.in.th/v1/verify" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-danger"><i class="bi bi-key-fill me-1"></i>API Token *</label>
+                        <InputText @bind-Value="config.ApiToken" class="form-control font-monospace shadow-sm" placeholder="ระบุ Token สำหรับร้านนี้" />
+                        <div class="form-text">รหัสลับจาก Thunder API สำหรับตรวจสอบยอดเงิน</div>
+                    </div>
+
+                    <div class="col-12"><hr class="my-2" /></div>
+
+                    @* --- ข้อมูลการตรวจชื่อบัญชี --- *@
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold"><i class="bi bi-search me-1"></i>คีย์เวิร์ดชื่อร้าน (Shop Name Key)</label>
+                        <InputText @bind-Value="config.ShopNameKey" class="form-control shadow-sm" placeholder="เช่น สมหวัง" />
+                        <div class="form-text small text-muted">ระบุชื่อหรือคำที่ต้องปรากฏใน "ชื่อผู้รับ" บนสลิป</div>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold"><i class="bi bi-credit-card-2-front me-1"></i>เบอร์พร้อมเพย์/เลขบัญชี</label>
+                        <InputText @bind-Value="config.ShopPromptPay" class="form-control shadow-sm" placeholder="เช่น 081xxxxxxx" />
+                        <div class="form-text small text-muted">ใช้สำหรับตรวจสอบเบอร์รับเงิน</div>
+                    </div>
+                </div>
+
+                <div class="mt-5 d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">
+                        <i class="bi bi-clock-history me-1"></i> อัปเดตล่าสุด:
+                        @* ✅ แก้ไข Error CS1501: ใช้ ?. เพื่อรองรับค่า Null *@
+                        @(config.LastUpdated?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                    </span>
+                    <button type="submit" class="btn btn-primary px-5 py-2 rounded-pill shadow fw-bold">
+                        <i class="bi bi-save2-fill me-2"></i>บันทึกการตั้งค่าร้านนี้
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private SlipConfig config = new();
+    private int selectedShopId = 1; // เริ่มต้นที่ร้านลูกชิ้น (ID 1)
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadConfigByShop();
+    }
+
+    private async Task OnShopChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            selectedShopId = id;
+            await LoadConfigByShop();
+        }
+    }
+
+    private async Task LoadConfigByShop()
+    {
+        using var context = DbFactory.CreateDbContext();
+
+        // ✅ แก้ไข Error CS1662: เรียกใช้ .ShopId ได้โดยตรง (ต้องอัปเดตไฟล์ SlipConfig.cs ก่อน)
+        var existing = await context.SlipConfigs
+            .FirstOrDefaultAsync(c => c.ShopId == selectedShopId);
+
+        if (existing != null)
+        {
+            config = existing;
+        }
+        else
+        {
+            // สร้างค่าเริ่มต้นหากยังไม่มีการตั้งค่าสำหรับร้านที่เลือก
+            config = new SlipConfig
+            {
+                ShopId = selectedShopId,
+                ApiUrl = "https://api.thunder.in.th/v1/verify",
+                ApiToken = "",
+                ShopNameKey = selectedShopId == 1 ? "สมหวัง ลูกชิ้น" : "สมหวัง น้ำปลาร้า",
+                ShopPromptPay = ""
+            };
+        }
+        StateHasChanged();
+    }
+
+    async Task SaveConfig()
+    {
+        if (string.IsNullOrWhiteSpace(config.ApiToken))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "⚠️ กรุณาระบุ API Token");
+            return;
+        }
+
+        using var context = DbFactory.CreateDbContext();
+        config.LastUpdated = DateTime.Now;
+
+        if (config.Id == 0)
+        {
+            context.SlipConfigs.Add(config);
+        }
+        else
+        {
+            var existing = await context.SlipConfigs.FindAsync(config.Id);
+            if (existing != null)
+            {
+                context.Entry(existing).CurrentValues.SetValues(config);
+            }
+        }
+
+        try
+        {
+            await context.SaveChangesAsync();
+            await JSRuntime.InvokeVoidAsync("alert", $"✅ บันทึกการตั้งค่าเรียบร้อยแล้ว!");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"❌ เกิดข้อผิดพลาด: {ex.Message}");
+        }
+    }
+}
